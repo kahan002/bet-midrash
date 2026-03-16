@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Torah Study — Commentator Agents</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,500;1,400&family=Noto+Serif+Hebrew:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;1,8..60,400&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #ffffff; --bg2: #f7f5f0; --bg3: #efece5;
+  --text: #1c1813; --text2: #6b5f50; --text3: #a0948a;
+  --border: rgba(80,60,40,0.12); --border2: rgba(80,60,40,0.22);
+  --radius: 12px; --radius-sm: 7px;
+  --agent-color: #8b3a2a;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e1c18; --bg2: #2a2720; --bg3: #363129;
+    --text: #f0ece4; --text2: #a09080; --text3: #6a6055;
+    --border: rgba(200,180,150,0.1); --border2: rgba(200,180,150,0.2);
+  }
+}
+
+body {
+  font-family: 'Source Serif 4', serif;
+  background: var(--bg2); color: var(--text);
+  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* ── Shell ── */
+#shell { display: flex; flex-direction: column; flex: 1; overflow: hidden; background: var(--bg); min-height: 0; }
+
+#header {
+  display: flex; align-items: center; gap: 14px;
+  padding: 11px 20px; border-bottom: 0.5px solid var(--border);
+  background: var(--bg2); flex-shrink: 0;
+}
+#agent-glyph {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: var(--agent-color);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Noto Serif Hebrew', serif; font-size: 13px;
+  color: #fff; font-weight: 500; flex-shrink: 0;
+}
+#header-title { font-family: 'Crimson Pro', serif; font-size: 19px; font-weight: 500; }
+#header-sub { font-size: 11px; color: var(--text2); margin-top: 1px; font-family: sans-serif; }
+
+#ref-bar {
+  display: flex; gap: 8px; padding: 8px 20px;
+  border-bottom: 0.5px solid var(--border);
+  flex-shrink: 0; align-items: center; flex-wrap: wrap;
+}
+#ref-input {
+  flex: 1; min-width: 180px; font-family: 'Source Serif 4', serif; font-size: 13px;
+  padding: 5px 10px; border: 0.5px solid var(--border2);
+  border-radius: var(--radius-sm); background: var(--bg2); color: var(--text); outline: none;
+}
+#ref-input:focus { border-color: var(--agent-color); }
+.ref-btn {
+  padding: 5px 13px; font-size: 12px; font-family: sans-serif;
+  border: 0.5px solid var(--border2); border-radius: var(--radius-sm);
+  background: transparent; color: var(--text); cursor: pointer;
+}
+.ref-btn:hover { background: var(--bg2); }
+.qref {
+  padding: 3px 10px; font-size: 11px; font-family: sans-serif;
+  border-radius: 20px; border: 0.5px solid var(--border);
+  background: transparent; color: var(--text2); cursor: pointer;
+}
+.qref:hover { color: var(--text); border-color: var(--border2); }
+
+#main { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+
+/* ── Text pane ── */
+#text-pane {
+  width: 42%; border-right: 0.5px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
+  min-height: 0;
+}
+.pane-head {
+  padding: 7px 14px; font-size: 10px; font-weight: 500; font-family: sans-serif;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--text2);
+  border-bottom: 0.5px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+  flex-shrink: 0;
+}
+.mode-btn {
+  padding: 2px 8px; font-size: 10px; font-family: sans-serif;
+  border: 0.5px solid var(--border2); border-radius: 20px;
+  background: transparent; color: var(--text2); cursor: pointer;
+}
+.mode-btn:hover { color: var(--text); }
+.active-mode { background: var(--bg3); color: var(--text); }
+
+#text-scroll { flex: 1; overflow-y: auto; padding: 16px 14px; min-height: 0; }
+#text-scroll::-webkit-scrollbar { width: 3px; }
+#text-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+#placeholder {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; height: 100%; gap: 10px;
+  color: var(--text2); font-size: 13px; text-align: center;
+  padding: 30px; font-style: italic;
+}
+.he-big { font-family: 'Noto Serif Hebrew', serif; font-size: 36px; color: var(--border2); margin-bottom: 8px; direction: rtl; }
+#sefaria-loading {
+  display: none; flex-direction: column; align-items: center;
+  justify-content: center; height: 100%; gap: 10px;
+  color: var(--text2); font-size: 13px; font-style: italic; font-family: sans-serif;
+}
+#verses-container { display: none; }
+
+.verse-block { margin-bottom: 20px; padding-bottom: 20px; border-bottom: 0.5px solid var(--border); min-width: 0; }
+.verse-block:last-child { border-bottom: none; }
+.vref { font-size: 10px; font-weight: 500; color: var(--agent-color); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; font-family: sans-serif; }
+.he-text { font-family: 'Noto Serif Hebrew', serif; direction: rtl; text-align: right; font-size: 15px; line-height: 1.9; color: var(--text); margin-bottom: 8px; overflow-wrap: break-word; }
+.verse-en { font-size: 13px; line-height: 1.65; color: var(--text2); font-style: italic; margin-bottom: 9px; overflow-wrap: break-word; }
+.sub-lbl { font-size: 10px; font-weight: 500; color: var(--agent-color); letter-spacing: 0.04em; margin-bottom: 3px; font-family: sans-serif; }
+.rashbam-en { font-family: 'Crimson Pro', serif; font-size: 14px; line-height: 1.8; color: var(--text); overflow-wrap: break-word; }
+
+/* ── Chat pane ── */
+#chat-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+#messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+#messages::-webkit-scrollbar { width: 3px; }
+#messages::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.msg { display: flex; gap: 10px; align-items: flex-start; }
+.msg.user { flex-direction: row-reverse; }
+.avatar {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 500; font-family: sans-serif;
+}
+.avatar.agent { color: #fff; font-family: 'Noto Serif Hebrew', serif; font-size: 12px; }
+.avatar.user { background: var(--bg3); border: 0.5px solid var(--border2); color: var(--text2); }
+.msg-body { flex: 1; max-width: 86%; }
+.msg-name { font-size: 11px; font-weight: 500; color: var(--text2); margin-bottom: 4px; font-family: sans-serif; }
+.msg-text { font-family: 'Crimson Pro', serif; font-size: 15px; line-height: 1.75; color: var(--text); }
+.msg-text p { margin-bottom: 0.6em; }
+.msg-text p:last-child { margin-bottom: 0; }
+.user .msg-text { font-family: sans-serif; font-size: 13px; color: var(--text2); }
+
+.chips { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.chip {
+  padding: 7px 12px; border: 0.5px solid var(--border);
+  border-radius: var(--radius-sm); font-size: 13px; font-family: sans-serif;
+  color: var(--text2); cursor: pointer; background: transparent; text-align: left;
+}
+.chip:hover { border-color: var(--border2); color: var(--text); background: var(--bg2); }
+
+.tdots { display: flex; gap: 4px; align-items: center; }
+.tdot { width: 5px; height: 5px; border-radius: 50%; background: var(--text2); animation: bop 1.2s infinite; }
+.tdot:nth-child(2){animation-delay:.2s} .tdot:nth-child(3){animation-delay:.4s}
+@keyframes bop{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
+
+.copy-btn {
+  margin-top: 6px; padding: 3px 10px; font-size: 11px; font-family: sans-serif;
+  border: 0.5px solid var(--border); border-radius: 20px;
+  background: transparent; color: var(--text3); cursor: pointer; display: inline-block;
+}
+.copy-btn:hover { color: var(--text2); border-color: var(--border2); }
+.copy-btn.copied { color: var(--agent-color); border-color: var(--agent-color); }
+
+#ctx-bar {
+  padding: 5px 16px; font-size: 11px; font-family: sans-serif;
+  color: var(--text2); border-top: 0.5px solid var(--border);
+  background: var(--bg2); font-style: italic; display: none; flex-shrink: 0;
+}
+#input-area {
+  border-top: 0.5px solid var(--border);
+  padding: 10px 16px; display: flex; gap: 8px; flex-shrink: 0;
+}
+#chat-input {
+  flex: 1; font-family: 'Source Serif 4', serif; font-size: 13px;
+  padding: 8px 12px; border: 0.5px solid var(--border2);
+  border-radius: var(--radius-sm); background: var(--bg2); color: var(--text);
+  outline: none; resize: none; min-height: 38px; max-height: 120px;
+}
+#chat-input:focus { border-color: var(--agent-color); }
+#send-btn {
+  padding: 8px 18px; font-size: 13px; font-family: sans-serif;
+  color: #fff; border: none; border-radius: var(--radius-sm);
+  cursor: pointer; flex-shrink: 0; background: var(--agent-color);
+}
+#send-btn:hover { opacity: 0.88; }
+#send-btn:disabled { opacity: 0.4; cursor: default; }
+
+#error-bar {
+  display: none; padding: 8px 16px; font-size: 12px; font-family: sans-serif;
+  background: #fcebeb; color: #a32d2d; border-top: 0.5px solid #f09595; flex-shrink: 0;
+}
+</style>
+</head>
+<body>
+<div id="shell">
+  <div id="header">
+    <div id="agent-glyph">ר</div>
+    <div>
+      <div id="header-title">Rashbam Study Companion</div>
+      <div id="header-sub">Rabbi Shmuel ben Meir · Peshat Commentary on Torah</div>
+    </div>
+  </div>
+
+  <div id="ref-bar">
+    <input id="ref-input" type="text" placeholder="e.g. Genesis 32:24  or  Exodus 21:1-10" onkeydown="if(event.key==='Enter')loadRef()" />
+    <button class="ref-btn" onclick="loadRef()">Load text</button>
+    <button class="qref" onclick="loadQuick('Genesis 32:24-33')">Jacob's wrestling</button>
+    <button class="qref" onclick="loadQuick('Genesis 1:1-5')">Bereshit</button>
+    <button class="qref" onclick="loadQuick('Exodus 21:1-10')">Mishpatim</button>
+    <button class="qref" onclick="loadQuick('Genesis 37:1-5')">Joseph narrative</button>
+  </div>
+
+  <div id="main">
+    <div id="text-pane">
+      <div class="pane-head">
+        <span>Rashbam's text · Sefaria</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span id="ref-label" style="font-style:italic;font-weight:400;letter-spacing:0;text-transform:none;font-size:11px;margin-right:4px;"></span>
+          <button onclick="setMode('both')" id="mode-both" class="mode-btn active-mode">He + En</button>
+          <button onclick="setMode('he')"   id="mode-he"   class="mode-btn">Hebrew</button>
+          <button onclick="setMode('en')"   id="mode-en"   class="mode-btn">English</button>
+        </div>
+      </div>
+      <div id="text-scroll">
+        <div id="placeholder">
+          <div class="he-big">רשב"ם</div>
+          <div>Enter a reference above to load Rashbam's commentary from Sefaria</div>
+          <div style="font-size:11px;margin-top:4px;font-family:sans-serif;">Hebrew and English will appear here</div>
+        </div>
+        <div id="sefaria-loading">
+          <div class="tdots"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div>
+          <span>Loading from Sefaria…</span>
+        </div>
+        <div id="verses-container"></div>
+      </div>
+    </div>
+
+    <div id="chat-pane">
+      <div class="pane-head">
+        <span>Ask Rashbam</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span id="ctx-label" style="font-style:italic;font-weight:400;letter-spacing:0;text-transform:none;font-size:11px;color:var(--text2);"></span>
+          <button onclick="copyConversation(event)" style="padding:2px 10px;font-size:10px;font-family:sans-serif;border:0.5px solid var(--border);border-radius:20px;background:transparent;color:var(--text3);cursor:pointer;" title="Copy full conversation to clipboard">Copy all</button>
+        </div>
+      </div>
+      <div id="messages">
+        <div class="msg">
+          <div class="avatar agent" style="background:var(--agent-color)">ר</div>
+          <div class="msg-body">
+            <div class="msg-name">Rashbam</div>
+            <div class="msg-text">
+              <p>Shalom. I am Shmuel ben Meir — called Rashbam — grandson of Rashi, of blessed memory.</p>
+              <p>My life's work has been the plain sense of Torah, the <em>peshat</em>, which my grandfather left too often aside in favor of midrash. Load any passage on the left, or ask me directly.</p>
+            </div>
+            <div class="chips">
+              <button class="chip" onclick="sendMsg('How does your approach to peshat differ from Rashi\\'s? Give a specific example.')">How does your approach differ from Rashi's?</button>
+              <button class="chip" onclick="sendMsg('What is really happening in Genesis 32:24-33 — the wrestling at the Jabbok? Who is the figure Jacob fights?')">What really happened at Jacob\\'s wrestling?</button>
+              <button class="chip" onclick="sendMsg('Give a specific example where your peshat reading of a Torah law conflicts with how the rabbis practice that law halakhically.')">Where do you depart from rabbinic halakha?</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="ctx-bar"></div>
+      <div id="error-bar" id="err"></div>
+      <div id="input-area">
+        <textarea id="chat-input" rows="1"
+          placeholder="Ask about a verse, Rashbam's reasoning, or any passage… (Enter to send)"
+          onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        <button id="send-btn" onclick="doSend()">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+// In development, backend runs on localhost:8000.
+// In production (Render/Railway), it's the same origin as this file.
+const API = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'
+  ? 'http://localhost:8000'
+  : '';  // same-origin in production
+
+const AGENT_ID = 'rashbam';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let currentRef = '';
+let displayMode = 'both';
+let pendingClarification = null; // { originalMessage } — set when backend requests clarification
+
+// ── Display mode ──────────────────────────────────────────────────────────────
+function setMode(mode) {
+  displayMode = mode;
+  ['both','he','en'].forEach(m =>
+    document.getElementById('mode-'+m).classList.toggle('active-mode', m === mode)
+  );
+  applyMode();
+}
+function applyMode() {
+  document.querySelectorAll('.he-text').forEach(el =>
+    el.style.display = displayMode === 'en' ? 'none' : '');
+  document.querySelectorAll('.verse-en, .rashbam-en').forEach(el =>
+    el.style.display = displayMode === 'he' ? 'none' : '');
+  document.querySelectorAll('.sub-lbl-en').forEach(el =>
+    el.style.display = displayMode === 'he' ? 'none' : '');
+  document.querySelectorAll('.sub-lbl-he').forEach(el =>
+    el.style.display = displayMode === 'en' ? 'none' : '');
+}
+
+// ── Sefaria (via backend) ─────────────────────────────────────────────────────
+async function loadRef() {
+  const raw = document.getElementById('ref-input').value.trim();
+  if (!raw) return;
+  await loadPassage(raw);
+}
+async function loadQuick(ref) {
+  document.getElementById('ref-input').value = ref;
+  await loadPassage(ref);
+}
+
+async function loadPassage(ref) {
+  document.getElementById('placeholder').style.display = 'none';
+  document.getElementById('sefaria-loading').style.display = 'flex';
+  document.getElementById('verses-container').style.display = 'none';
+  hideError();
+
+  try {
+    const resp = await fetch(`${API}/api/passage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ ref, agent_id: AGENT_ID })
+    });
+    if (!resp.ok) throw new Error(`Server error: ${resp.status}`);
+    const data = await resp.json();
+
+    document.getElementById('sefaria-loading').style.display = 'none';
+    const container = document.getElementById('verses-container');
+    container.innerHTML = '';
+    container.style.display = 'block';
+    currentRef = data.ref;
+    document.getElementById('ref-label').textContent = data.ref;
+    document.getElementById('ctx-label').textContent = 'passage: ' + data.ref;
+
+    const bible = data.bible;
+    const comm  = data.commentary;
+    const len = Math.max(comm.en.length, comm.he.length);
+
+    if (len === 0) {
+      container.innerHTML = `<div style="font-style:italic;color:var(--text2);font-size:13px;padding:8px 0;">
+        No Rashbam commentary found for <strong>${esc(data.ref)}</strong> on Sefaria.
+        You can still ask — Rashbam will reason from his principles and flag extrapolation.
+      </div>`;
+    } else {
+      for (let i = 0; i < len; i++) {
+        const b = document.createElement('div');
+        b.className = 'verse-block';
+        let html = `<div class="vref">Verse ${i+1}</div>`;
+        if (bible.he[i]) html += `<div class="he-text">${esc(bible.he[i])}</div>`;
+        if (bible.en[i]) html += `<div class="verse-en">${esc(bible.en[i])}</div>`;
+        if (comm.he[i])  html += `<div class="sub-lbl sub-lbl-he" style="margin-top:10px">Rashbam (Hebrew)</div><div class="he-text">${esc(comm.he[i])}</div>`;
+        if (comm.en[i]) {
+          const titleNote = comm.he_version_title ? ` · ${comm.he_version_title}` : '';
+          html += `<div class="sub-lbl sub-lbl-en">Rashbam (translation${titleNote})</div><div class="rashbam-en">${esc(comm.en[i])}</div>`;
+        }
+        b.innerHTML = html;
+        container.appendChild(b);
+      }
+    }
+
+    const ctxBar = document.getElementById('ctx-bar');
+    ctxBar.style.display = 'block';
+    ctxBar.textContent = `Loaded: ${data.ref}`;
+    applyMode();
+
+    // Ask Rashbam to acknowledge the passage
+    await callAgent(`The passage ${data.ref} has just been loaded. As Rashbam, briefly acknowledge it and note one or two things of peshat interest, with precise verse references.`, true);
+
+  } catch(e) {
+    document.getElementById('sefaria-loading').style.display = 'none';
+    document.getElementById('placeholder').style.display = 'flex';
+    showError('Could not load passage: ' + e.message);
+  }
+}
+
+// ── Chat (via backend) ────────────────────────────────────────────────────────
+async function callAgent(message, silent = false) {
+  if (!silent) addMsg('user', message);
+  const typingId = addTyping();
+  document.getElementById('send-btn').disabled = true;
+  hideError();
+
+  // If a clarification is pending, combine original question + user's answer
+  // and resend as a single message so the backend can re-extract with full context.
+  let sendMessage = message;
+  if (pendingClarification && !silent) {
+    sendMessage = `${pendingClarification.originalMessage}\n\nClarification from student: ${message}`;
+    pendingClarification = null;
+  }
+
+  try {
+    const resp = await fetch(`${API}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        agent_id: AGENT_ID,
+        message: sendMessage,
+        loaded_ref: currentRef || null
+      })
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `Server error: ${resp.status}`);
+    }
+    const data = await resp.json();
+
+    // If the backend needs clarification, display the question and wait.
+    if (data.clarification_needed) {
+      removeTyping(typingId);
+      pendingClarification = { originalMessage: sendMessage };
+      addMsg('agent', data.clarification_needed);
+      document.getElementById('send-btn').disabled = false;
+      return;
+    }
+
+    // Auto-load primary verse into text pane if nothing is currently loaded.
+    if (!currentRef && data.retrieved_refs && data.retrieved_refs.length > 0) {
+      const primaryRef = data.retrieved_refs[0];
+      document.getElementById('ref-input').value = primaryRef;
+      loadPassage(primaryRef); // fire and forget — text pane update only
+    }
+
+    removeTyping(typingId);
+    addMsg('agent', data.response);
+  } catch(e) {
+    removeTyping(typingId);
+    showError('Could not reach server: ' + e.message);
+  }
+  document.getElementById('send-btn').disabled = false;
+}
+
+async function doSend() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = ''; input.style.height = '';
+  await callAgent(text, false);
+}
+
+function sendMsg(text) {
+  document.getElementById('chat-input').value = text;
+  doSend();
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
+}
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function addMsg(role, text) {
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg' + (role === 'user' ? ' user' : '');
+  const avatar = role === 'agent'
+    ? `<div class="avatar agent" style="background:var(--agent-color)">ר</div>`
+    : `<div class="avatar user">You</div>`;
+  const name = role === 'agent' ? 'Rashbam' : 'You';
+  // Copy button — text stored as data attribute to avoid encoding issues
+  // with Hebrew characters in inline onclick handlers.
+  const copyBtn = `<button class="copy-btn" data-copy="">Copy</button>`;
+  div.innerHTML = `${avatar}<div class="msg-body"><div class="msg-name">${name}</div><div class="msg-text">${fmt(text)}</div>${copyBtn}</div>`;
+  div.querySelector('.copy-btn').dataset.copy = text;
+  div.querySelector('.copy-btn').addEventListener('click', function() {
+    copyMsg(this, this.dataset.copy);
+  });
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text);
+  }
+  return new Promise((resolve, reject) => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    try { document.execCommand('copy') ? resolve() : reject(); }
+    catch(e) { reject(e); }
+    finally { document.body.removeChild(ta); }
+  });
+}
+
+function copyMsg(btn, text) {
+  copyToClipboard(text).then(() => {
+    btn.textContent = 'Copied'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  }).catch(() => {
+    btn.textContent = 'Failed'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+function copyConversation(event) {
+  const lines = [];
+  document.querySelectorAll('.msg').forEach(msg => {
+    const name = msg.querySelector('.msg-name')?.textContent || '';
+    const text = msg.querySelector('.msg-text')?.innerText || '';
+    if (name && text) lines.push(`${name}:\n${text}`);
+  });
+  const btn = event.target;
+  copyToClipboard(lines.join('\n\n---\n\n')).then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy all'; }, 2000);
+  }).catch(() => {
+    btn.textContent = 'Failed';
+    setTimeout(() => { btn.textContent = 'Copy all'; }, 2000);
+  });
+}
+
+let typingN = 0;
+function addTyping() {
+  const id = 'typing-' + (++typingN);
+  const msgs = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg'; div.id = id;
+  div.innerHTML = `<div class="avatar agent" style="background:var(--agent-color)">ר</div>
+    <div class="msg-body"><div class="msg-name">Rashbam</div>
+    <div class="tdots"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div></div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return id;
+}
+function removeTyping(id) { const el = document.getElementById(id); if (el) el.remove(); }
+
+function fmt(text) {
+  return text.split(/\n+/).filter(p=>p.trim()).map(p=>`<p>${esc(p)}</p>`).join('');
+}
+function esc(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function showError(msg) {
+  const el = document.getElementById('error-bar');
+  el.textContent = msg; el.style.display = 'block';
+}
+function hideError() {
+  document.getElementById('error-bar').style.display = 'none';
+}
+
+// ── Init: load agent metadata to set color/glyph dynamically ─────────────────
+(async () => {
+  try {
+    const resp = await fetch(`${API}/api/agents`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const agent = (data.agents||[]).find(a=>a.id===AGENT_ID);
+    if (agent) {
+      const color = agent.color;
+      document.documentElement.style.setProperty('--agent-color', color);
+      document.getElementById('agent-glyph').textContent = agent.hebrew_name;
+      document.querySelector('#header-title').textContent = agent.name + ' Study Companion';
+      document.querySelector('#header-sub').textContent =
+        agent.full_name + ' · ' + agent.tradition;
+    }
+  } catch(e) {
+    // Backend not running — show a helpful message
+    showError('Cannot connect to backend. Run: cd backend && uvicorn main:app --reload --port 8000');
+  }
+})();
+</script>
+</body>
+</html>
