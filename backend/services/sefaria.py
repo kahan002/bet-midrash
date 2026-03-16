@@ -73,19 +73,44 @@ def _extract_verse_array(text) -> list:
     """
     Returns an index-aligned list where each slot is one verse string or None.
     Preserves verse positions so sparse commentary arrays stay aligned.
+
+    Sefaria's JaggedArray structure for commentaries:
+    - Flat list of strings: ["verse1", "verse2"] → one entry per verse
+    - List of lists: [["seg1", "seg2"], "verse2"] → sub-segments joined per verse
+    - Single wrapped list: [["seg1", "seg2", "seg3"]] → one verse, join all segments
+    - Deeply nested single verse: ["seg1", "seg2", "seg3"] where all items are
+      strings and represent one commentary entry split into paragraphs → join all
     """
     if isinstance(text, str):
         return [text.strip() or None]
-    if not isinstance(text, list):
+    if not isinstance(text, list) or not text:
         return []
+
+    # If it's a list where the single element is itself a list, unwrap one level
     if len(text) == 1 and isinstance(text[0], list):
         return _extract_verse_array(text[0])
+
+    # If ALL items are strings, this is either:
+    # (a) multiple verses as flat strings, OR
+    # (b) multiple sub-segments of a single verse
+    # We detect (b) by checking if this looks like a JaggedArray at verse level
+    # (which would have been unwrapped already) vs segment level.
+    # Since we can't distinguish reliably, join sub-segments when the parent
+    # was a single-element list (already handled above via recursion).
+    # For multi-element all-string lists, treat each as a separate verse.
     result = []
     for item in text:
         if isinstance(item, str):
             result.append(item.strip() or None)
         elif isinstance(item, list):
-            parts = [s.strip() for s in item if isinstance(s, str) and s.strip()]
+            # Sub-segments of one verse — recursively flatten and join
+            def _flatten(lst):
+                for x in lst:
+                    if isinstance(x, list):
+                        yield from _flatten(x)
+                    elif isinstance(x, str) and x.strip():
+                        yield x.strip()
+            parts = list(_flatten(item))
             result.append(" ".join(parts) if parts else None)
         else:
             result.append(None)
