@@ -19,10 +19,10 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 load_dotenv()
 
-from agents import list_agents, get_agent
-from orchestrator import ask, debate_turn
-from services import sefaria as sefaria_svc
-from services import conversation as conv_store
+from .agents import list_agents, get_agent
+from .orchestrator import ask, debate_turn
+from .services import sefaria as sefaria_svc
+from .services import conversation as conv_store
 
 
 @asynccontextmanager
