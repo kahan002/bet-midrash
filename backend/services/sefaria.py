@@ -173,7 +173,7 @@ async def fetch_text(sefaria_ref: str,
     Uses ?version=english&version=hebrew to guarantee both languages
     appear in versions[] when available.
     """
-    url = SEFARIA_BASE + sefaria_ref + "?version=english&version=hebrew"
+    url = SEFARIA_BASE + sefaria_ref + "?version=english&version=hebrew&context=0&pad=0"
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(url)
