@@ -24,10 +24,15 @@
   }
 }
 
+html { height: 100%; min-height: 0; }
+
 body {
   font-family: 'Source Serif 4', serif;
   background: var(--bg2); color: var(--text);
-  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  display: flex; flex-direction: column; overflow: hidden;
 }
 
 /* ── Shell ── */
