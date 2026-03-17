@@ -5,12 +5,12 @@ and runs self-directed retrieval before answering.
 Process for ask():
   1. Extract relevant verse refs AND Rashi refs from the question (one LLM call)
   2. Fetch Rashbam + Rashi in parallel from Sefaria
-  3. Build the agent response with all verified text injected
+  3. Build the agent response with all verified text injected + tool access
 """
 import json
 import asyncio
 from typing import Optional
-from .agents import get_agent
+from .agents import get_agent, build_fetch_tool_schema, get_all_configs
 from .services import conversation as conv_store
 from .services import sefaria as sefaria_svc
 from .services import llm_client
@@ -198,7 +198,11 @@ async def ask(
 
     async def safe_fetch_passage(ref: str) -> Optional[str]:
         try:
-            p = await sefaria_svc.fetch_passage(ref, agent.config.sefaria_prefix)
+            p = await sefaria_svc.fetch_passage(
+                ref,
+                agent.config.sefaria_prefix,
+                en_translation_prefs=agent.config.en_translation_prefs,
+            )
             return p["context_string"]
         except Exception as e:
             print(f"[sefaria] passage fetch failed for {ref}: {e}")
@@ -228,7 +232,20 @@ async def ask(
     fetched_rashi       = [r for r in rashi_results      if r]
     fetched_concordance = [r for r in concordance_results if r]
 
-    # ── Step 3: build context and generate response ───────────────────────────
+    # ── Step 3: build context and generate response with tool access ──────────
+
+    # Build the agent_configs dict for the tool executor
+    all_configs = {c.id: c for c in get_all_configs()}
+
+    async def tool_executor(tool_name: str, tool_input: dict) -> dict:
+        """Execute a fetch_sefaria tool call from the agent."""
+        if tool_name != "fetch_sefaria":
+            return {"status": "error", "message": f"Unknown tool: {tool_name}"}
+        ref    = tool_input.get("ref", "")
+        source = tool_input.get("source", "")
+        print(f"[tool] fetch_sefaria({ref!r}, {source!r})")
+        return await sefaria_svc.execute_fetch_tool(ref, source, all_configs)
+
     rashi_block = (
         "RASHI'S COMMENTARY ON THESE VERSES (verified from Sefaria):\n" +
         "\n\n".join(fetched_rashi) +
@@ -265,18 +282,32 @@ async def ask(
         auto_fetched_verse=auto_fetched_verse,
     )
 
-    response = llm_client.complete(system=system, messages=messages)
+    # Use tool-enabled completion for the agent response
+    fetch_tool = build_fetch_tool_schema()
+    response, tool_calls = await llm_client.complete_with_tools(
+        system=system,
+        messages=messages,
+        tools=[fetch_tool],
+        tool_executor=tool_executor,
+    )
 
     conv_store.append(session_id, agent_id, "user", user_message)
     conv_store.append(session_id, agent_id, "assistant", response)
+
+    # Collect refs fetched via tool calls for the frontend text pane
+    tool_fetched_refs = [
+        tc["ref"] for tc in tool_calls
+        if tc.get("status") == "found" and tc.get("source") not in ("rashi", "bible")
+    ]
 
     return {
         "agent_id": agent_id,
         "response": response,
         "clarification_needed": None,
-        "retrieved_refs": all_verse_refs,
+        "retrieved_refs": all_verse_refs + tool_fetched_refs,
         "retrieved_rashi": all_rashi_refs,
         "retrieved_words": all_words,
+        "tool_calls": tool_calls,
     }
 
 

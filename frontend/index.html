@@ -398,7 +398,6 @@ async function callAgent(message, silent = false) {
   hideError();
 
   // If a clarification is pending, combine original question + user's answer
-  // and resend as a single message so the backend can re-extract with full context.
   let sendMessage = message;
   if (pendingClarification && !silent) {
     sendMessage = `${pendingClarification.originalMessage}\n\nClarification from student: ${message}`;
@@ -429,6 +428,25 @@ async function callAgent(message, silent = false) {
       addMsg('agent', data.clarification_needed);
       document.getElementById('send-btn').disabled = false;
       return;
+    }
+
+    // If the agent made tool calls, show a brief indicator before the response.
+    // Also update the text pane if the agent fetched a new passage for itself.
+    if (data.tool_calls && data.tool_calls.length > 0) {
+      const found = data.tool_calls.filter(tc => tc.status === 'found');
+      const ownFetch = found.find(tc => tc.source && tc.source !== 'rashi' && tc.source !== 'bible');
+      if (ownFetch && !currentRef) {
+        // Agent fetched its own commentary — update text pane
+        document.getElementById('ref-input').value = ownFetch.ref;
+        loadPassage(ownFetch.ref); // fire and forget
+      }
+      // Brief "consulted Sefaria" note in ctx-bar
+      if (found.length > 0) {
+        const refs = found.map(tc => tc.ref).join(', ');
+        const bar = document.getElementById('ctx-bar');
+        bar.style.display = 'block';
+        bar.textContent = `Rashbam consulted Sefaria: ${refs}`;
+      }
     }
 
     // Auto-load primary verse into text pane if nothing is currently loaded.

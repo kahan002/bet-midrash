@@ -205,19 +205,27 @@ async def fetch_text(sefaria_ref: str,
     }
 
 
-async def fetch_passage(ref: str, sefaria_commentary_prefix: str) -> dict:
+async def fetch_passage(
+    ref: str,
+    sefaria_commentary_prefix: str,
+    en_translation_prefs: list[str] | None = None,
+) -> dict:
     """
     Fetch both the biblical text and the commentary for a given ref.
+    en_translation_prefs comes from AgentConfig — no hardcoded Rashbam preference here.
     """
     ref = normalize_ref(ref)
     sefaria_ref = _to_sefaria_url(ref)
     prefix_url = sefaria_commentary_prefix.strip().replace(" ", "_") + "_"
     commentary_sefaria_ref = prefix_url + sefaria_ref
 
+    # Fall back to generic preferences if none provided
+    commentary_prefs = en_translation_prefs or _RASHBAM_EN_PREF
+
     import asyncio
     bible_data, commentary_data = await asyncio.gather(
         fetch_text(sefaria_ref, en_preferences=_BIBLE_EN_PREF),
-        fetch_text(commentary_sefaria_ref, en_preferences=_RASHBAM_EN_PREF),
+        fetch_text(commentary_sefaria_ref, en_preferences=commentary_prefs),
     )
 
     he_verses = commentary_data["he"]
@@ -233,16 +241,14 @@ async def fetch_passage(ref: str, sefaria_commentary_prefix: str) -> dict:
                          for i, t in enumerate(bible_data["en_clean"]))
         )
     else:
+        en_label = commentary_data.get("en_translation_label", "")
         if not has_english:
             parts.append(
                 f"Note: English translation not available on Sefaria for {ref}. "
                 f"Hebrew commentary provided."
             )
         else:
-            parts.append(
-                f"Translation: {commentary_data['en_translation_label']} "
-                f"(Note: Munk occasionally paraphrases or omits — check Hebrew where in doubt)"
-            )
+            parts.append(f"Translation: {en_label}")
         for i, comm_he in enumerate(he_verses):
             if not comm_he:
                 continue
@@ -254,8 +260,8 @@ async def fetch_passage(ref: str, sefaria_commentary_prefix: str) -> dict:
             else:
                 parts.append(f"{label} — Bible: \"{bible_en or ''}\" | Commentary (Hebrew): \"{comm_he}\"")
 
-    is_munk = "munk" in commentary_data.get("en_translation_label", "").lower() or \
-              "hachut" in commentary_data.get("en_translation_label", "").lower()
+    en_label = commentary_data.get("en_translation_label", "")
+    is_munk = "munk" in en_label.lower() or "hachut" in en_label.lower()
 
     return {
         "ref": ref,
@@ -269,12 +275,111 @@ async def fetch_passage(ref: str, sefaria_commentary_prefix: str) -> dict:
             "he": commentary_data["he"],
             "has_english": has_english,
             "is_munk": is_munk,
-            "en_translation_label": commentary_data.get("en_translation_label", ""),
+            "en_translation_label": en_label,
             "found": commentary_data["found"],
         },
         "context_string": f"VERIFIED TEXT FROM SEFARIA for {ref}:\n"
                           + "\n".join(parts),
     }
+
+
+async def execute_fetch_tool(
+    ref: str,
+    source: str,
+    agent_configs: dict,  # {agent_id: AgentConfig} — from registry
+) -> dict:
+    """
+    Execute a fetch_sefaria tool call from the agent.
+    Returns a structured result the agent and the tool-call loop can interpret.
+
+    Return shapes:
+      {"status": "found", "ref": ..., "source": ..., "text": ...}
+      {"status": "not_found", "ref": ..., "source": ..., "ref_valid": bool, "message": ...}
+      {"status": "error", "ref": ..., "source": ..., "message": ...}
+    """
+    try:
+        normalized = normalize_ref(ref)
+    except Exception:
+        return {
+            "status": "not_found",
+            "ref": ref,
+            "source": source,
+            "ref_valid": False,
+            "message": f"Could not parse reference '{ref}'. Please check the format (e.g. 'Exodus 3:11').",
+        }
+
+    try:
+        if source == "bible":
+            data = await fetch_text(
+                _to_sefaria_url(normalized),
+                en_preferences=_BIBLE_EN_PREF,
+            )
+            if not data["found"]:
+                return {
+                    "status": "not_found",
+                    "ref": normalized,
+                    "source": source,
+                    "ref_valid": False,
+                    "message": f"Biblical reference '{normalized}' not found on Sefaria.",
+                }
+            en = " ".join(data["en_clean"])
+            he = " ".join(data["he_clean"])
+            return {
+                "status": "found",
+                "ref": normalized,
+                "source": source,
+                "text_he": he,
+                "text_en": en,
+                "translation_label": data.get("en_version_title", ""),
+            }
+
+        elif source in agent_configs:
+            config = agent_configs[source]
+            result = await fetch_passage(
+                normalized,
+                config.sefaria_prefix,
+                en_translation_prefs=config.en_translation_prefs,
+            )
+            if not result["commentary"]["found"]:
+                # Distinguish: did the verse itself exist?
+                bible_found = bool(result["bible"]["en"] or result["bible"]["he"])
+                return {
+                    "status": "not_found",
+                    "ref": normalized,
+                    "source": source,
+                    "ref_valid": bible_found,
+                    "message": (
+                        f"No {config.name} commentary preserved on Sefaria for {normalized}."
+                        if bible_found else
+                        f"Reference '{normalized}' not found on Sefaria."
+                    ),
+                }
+            return {
+                "status": "found",
+                "ref": normalized,
+                "source": source,
+                "text_he": " ".join(t for t in result["commentary"]["he"] if t),
+                "text_en": " ".join(t for t in result["commentary"]["en"] if t),
+                "translation_label": result["commentary"]["en_translation_label"],
+                "show_translation_caveat": config.show_translation_caveat,
+                "context_string": result["context_string"],
+            }
+
+        else:
+            return {
+                "status": "error",
+                "ref": normalized,
+                "source": source,
+                "message": f"Unknown source '{source}'.",
+            }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "ref": normalized,
+            "source": source,
+            "message": f"Sefaria fetch failed: {e}",
+        }
 
 
 # ─── Concordance (Torah only) ─────────────────────────────────────────────────

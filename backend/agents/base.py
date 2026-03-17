@@ -5,16 +5,31 @@ from abc import ABC, abstractmethod
 
 @dataclass
 class AgentConfig:
-    """All static metadata for a commentator agent."""
-    id: str                    # e.g. 'rashbam'
-    name: str                  # e.g. 'Rashbam'
-    hebrew_name: str           # e.g. 'רשב"ם'
-    full_name: str             # e.g. 'Rabbi Shmuel ben Meir'
-    dates: str                 # e.g. 'c.1080–c.1160'
-    tradition: str             # e.g. 'Franco-Jewish Tosafist'
-    color: str                 # hex for UI theming, e.g. '#8b3a2a'
-    sefaria_prefix: str        # e.g. 'Rashbam on '
-    coverage_notes: str        # what books/sections are preserved
+    """
+    All static metadata for a commentator agent.
+
+    This is the single source of truth for everything commentator-specific:
+    - Sefaria fetch prefix (used by the fetch tool)
+    - Translation preferences (which English translator to prefer)
+    - UI metadata (name, color, etc.)
+
+    When you add a new agent, you add its AgentConfig here and everything
+    else — the fetch tool schema, the UI caveat, the translation picker —
+    updates automatically.
+    """
+    id: str                              # e.g. 'rashbam'
+    name: str                            # e.g. 'Rashbam'
+    hebrew_name: str                     # e.g. 'רשב"ם'
+    full_name: str                       # e.g. 'Rabbi Shmuel ben Meir'
+    dates: str                           # e.g. 'c.1080–c.1160'
+    tradition: str                       # e.g. 'Franco-Jewish Tosafist'
+    color: str                           # hex for UI theming, e.g. '#8b3a2a'
+    sefaria_prefix: str                  # e.g. 'Rashbam on '
+    coverage_notes: str                  # what books/sections are preserved
+    en_translation_prefs: list[str]      # ordered preferred English translators
+                                         # (lowercase substrings of versionTitle)
+    en_translation_label: str            # human-readable label, e.g. 'Munk'
+    show_translation_caveat: bool        # True if translation sometimes paraphrases/omits
 
 
 class CommentatorAgent(ABC):
@@ -36,8 +51,7 @@ class CommentatorAgent(ABC):
 
     The only method subclasses *must* implement is system_prompt(). Everything
     else — sefaria_ref(), build_messages(), to_dict() — is provided here and
-    can be overridden if a specific commentator needs different behaviour
-    (e.g. a commentator whose Sefaria prefix uses a different naming convention).
+    can be overridden if a specific commentator needs different behaviour.
     """
 
     def __init__(self, config: AgentConfig):
@@ -97,7 +111,7 @@ class CommentatorAgent(ABC):
 
         if auto_fetched_verse:
             system += (
-                f"\n\n══ AUTO-FETCHED VERSE (verified from Sefaria for this question) ══\n"
+                f"\n\n══ AUTO-FETCHED CONTEXT (verified from Sefaria) ══\n"
                 f"{auto_fetched_verse}"
             )
 
@@ -121,4 +135,6 @@ class CommentatorAgent(ABC):
             "tradition": self.config.tradition,
             "color": self.config.color,
             "coverage_notes": self.config.coverage_notes,
+            "en_translation_label": self.config.en_translation_label,
+            "show_translation_caveat": str(self.config.show_translation_caveat),
         }
