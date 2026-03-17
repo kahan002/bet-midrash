@@ -325,7 +325,7 @@ async function loadQuick(ref) {
   await loadPassage(ref);
 }
 
-async function loadPassage(ref) {
+async function loadPassage(ref, suppressAck = false) {
   document.getElementById('placeholder').style.display = 'none';
   document.getElementById('sefaria-loading').style.display = 'flex';
   document.getElementById('verses-container').style.display = 'none';
@@ -380,8 +380,11 @@ async function loadPassage(ref) {
     ctxBar.textContent = `Loaded: ${data.ref}`;
     applyMode();
 
-    // Ask Rashbam to acknowledge the passage
-    await callAgent(`The passage ${data.ref} has just been loaded. As Rashbam, briefly acknowledge it and note one or two things of peshat interest, with precise verse references.`, true);
+    // Only acknowledge when the user explicitly loaded the passage —
+    // not when the system auto-loaded it mid-conversation.
+    if (!suppressAck) {
+      await callAgent(`The passage ${data.ref} has just been loaded. As Rashbam, briefly acknowledge it and note one or two things of peshat interest, with precise verse references.`, true);
+    }
 
   } catch(e) {
     document.getElementById('sefaria-loading').style.display = 'none';
@@ -436,9 +439,9 @@ async function callAgent(message, silent = false) {
       const found = data.tool_calls.filter(tc => tc.status === 'found');
       const ownFetch = found.find(tc => tc.source && tc.source !== 'rashi' && tc.source !== 'bible');
       if (ownFetch && !currentRef) {
-        // Agent fetched its own commentary — update text pane
+        // Agent fetched its own commentary — update text pane, no acknowledgment
         document.getElementById('ref-input').value = ownFetch.ref;
-        loadPassage(ownFetch.ref); // fire and forget
+        loadPassage(ownFetch.ref, true); // suppressAck — agent already responded
       }
       // Brief "consulted Sefaria" note in ctx-bar
       if (found.length > 0) {
@@ -453,7 +456,7 @@ async function callAgent(message, silent = false) {
     if (!currentRef && data.retrieved_refs && data.retrieved_refs.length > 0) {
       const primaryRef = data.retrieved_refs[0];
       document.getElementById('ref-input').value = primaryRef;
-      loadPassage(primaryRef); // fire and forget — text pane update only
+      loadPassage(primaryRef, true); // suppressAck — mid-conversation auto-load
     }
 
     removeTyping(typingId);
