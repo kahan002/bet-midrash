@@ -1,5 +1,6 @@
 from .base import CommentatorAgent, AgentConfig
 from .rashbam import RashbamAgent
+from .rashi import RashiAgent
 
 # ─── Agent registry ───────────────────────────────────────────────────────────
 # Add new agents here. Everything that depends on the set of available agents
@@ -9,7 +10,7 @@ _REGISTRY: dict[str, CommentatorAgent] = {
     agent.id: agent
     for agent in [
         RashbamAgent(),
-        # RashiAgent(),
+        RashiAgent(),
         # IbnEzraAgent(),
         # RambanAgent(),
     ]

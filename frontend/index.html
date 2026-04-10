@@ -207,6 +207,14 @@ body {
       <div id="header-title">Rashbam Study Companion</div>
       <div id="header-sub">Rabbi Shmuel ben Meir · Peshat Commentary on Torah</div>
     </div>
+    <select id="agent-select" onchange="switchAgent(this.value)" style="
+      margin-left:auto; font-family:sans-serif; font-size:12px;
+      background:var(--bg2); color:var(--text2); border:0.5px solid var(--border2);
+      border-radius:4px; padding:4px 8px; cursor:pointer;
+    ">
+      <option value="rashbam">Rashbam</option>
+      <option value="rashi">Rashi</option>
+    </select>
   </div>
 
   <div id="ref-bar">
@@ -288,7 +296,7 @@ const API = window.location.hostname === '127.0.0.1' || window.location.hostname
   ? 'http://localhost:8000'
   : '';  // same-origin in production
 
-const AGENT_ID = 'rashbam';
+let AGENT_ID = 'rashbam'; // default, updated by switcher
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentRef = '';
@@ -325,7 +333,7 @@ async function loadQuick(ref) {
   await loadPassage(ref);
 }
 
-async function loadPassage(ref, suppressAck = false) {
+async function loadPassage(ref) {
   document.getElementById('placeholder').style.display = 'none';
   document.getElementById('sefaria-loading').style.display = 'flex';
   document.getElementById('verses-container').style.display = 'none';
@@ -380,11 +388,8 @@ async function loadPassage(ref, suppressAck = false) {
     ctxBar.textContent = `Loaded: ${data.ref}`;
     applyMode();
 
-    // Only acknowledge when the user explicitly loaded the passage —
-    // not when the system auto-loaded it mid-conversation.
-    if (!suppressAck) {
-      await callAgent(`The passage ${data.ref} has just been loaded. As Rashbam, briefly acknowledge it and note one or two things of peshat interest, with precise verse references.`, true);
-    }
+    // Ask Rashbam to acknowledge the passage
+    await callAgent(`The passage ${data.ref} has just been loaded. As Rashbam, briefly acknowledge it and note one or two things of peshat interest, with precise verse references.`, true);
 
   } catch(e) {
     document.getElementById('sefaria-loading').style.display = 'none';
@@ -439,9 +444,9 @@ async function callAgent(message, silent = false) {
       const found = data.tool_calls.filter(tc => tc.status === 'found');
       const ownFetch = found.find(tc => tc.source && tc.source !== 'rashi' && tc.source !== 'bible');
       if (ownFetch && !currentRef) {
-        // Agent fetched its own commentary — update text pane, no acknowledgment
+        // Agent fetched its own commentary — update text pane
         document.getElementById('ref-input').value = ownFetch.ref;
-        loadPassage(ownFetch.ref, true); // suppressAck — agent already responded
+        loadPassage(ownFetch.ref); // fire and forget
       }
       // Brief "consulted Sefaria" note in ctx-bar
       if (found.length > 0) {
@@ -456,7 +461,7 @@ async function callAgent(message, silent = false) {
     if (!currentRef && data.retrieved_refs && data.retrieved_refs.length > 0) {
       const primaryRef = data.retrieved_refs[0];
       document.getElementById('ref-input').value = primaryRef;
-      loadPassage(primaryRef, true); // suppressAck — mid-conversation auto-load
+      loadPassage(primaryRef); // fire and forget — text pane update only
     }
 
     removeTyping(typingId);
@@ -582,24 +587,64 @@ function hideError() {
   document.getElementById('error-bar').style.display = 'none';
 }
 
-// ── Init: load agent metadata to set color/glyph dynamically ─────────────────
+// ── Agent switching ───────────────────────────────────────────────────────────
+function switchAgent(agentId) {
+  AGENT_ID = agentId;
+  // Reset conversation and text pane
+  currentRef = '';
+  pendingClarification = null;
+  document.getElementById('messages').innerHTML = '';
+  document.getElementById('verses-container').innerHTML = '';
+  document.getElementById('verses-container').style.display = 'none';
+  document.getElementById('placeholder').style.display = 'flex';
+  document.getElementById('ref-input').value = '';
+  document.getElementById('ref-label').textContent = '';
+  document.getElementById('ctx-label').textContent = '';
+  document.getElementById('ctx-bar').style.display = 'none';
+  // Update UI from agent metadata already loaded
+  const agent = _loadedAgents[agentId];
+  if (agent) applyAgentUI(agent);
+  // Trigger welcome message
+  callAgent(`Introduce yourself briefly as ${agent ? agent.name : agentId}.`, true);
+}
+
+let _loadedAgents = {};
+
+function applyAgentUI(agent) {
+  document.documentElement.style.setProperty('--agent-color', agent.color);
+  document.getElementById('agent-glyph').textContent = agent.hebrew_name;
+  document.querySelector('#header-title').textContent = agent.name + ' Study Companion';
+  document.querySelector('#header-sub').textContent =
+    agent.full_name + ' · ' + agent.tradition;
+  // Update pane headers
+  document.querySelector('#text-pane .pane-head span').textContent =
+    agent.name + "'s text · Sefaria";
+  document.querySelector('#chat-pane .pane-head span').textContent =
+    'Ask ' + agent.name;
+  // Update placeholder
+  document.querySelector('.he-big').textContent = agent.hebrew_name;
+  document.querySelector('#placeholder div:nth-child(2)').textContent =
+    `Enter a reference above to load ${agent.name}'s commentary from Sefaria`;
+}
+
+// ── Init: load agent metadata ─────────────────────────────────────────────────
 (async () => {
   try {
     const resp = await fetch(`${API}/api/agents`);
     if (!resp.ok) return;
     const data = await resp.json();
-    const agent = (data.agents||[]).find(a=>a.id===AGENT_ID);
-    if (agent) {
-      const color = agent.color;
-      document.documentElement.style.setProperty('--agent-color', color);
-      document.getElementById('agent-glyph').textContent = agent.hebrew_name;
-      document.querySelector('#header-title').textContent = agent.name + ' Study Companion';
-      document.querySelector('#header-sub').textContent =
-        agent.full_name + ' · ' + agent.tradition;
-    }
+    // Store all agents
+    (data.agents || []).forEach(a => { _loadedAgents[a.id] = a; });
+    // Populate dropdown
+    const sel = document.getElementById('agent-select');
+    sel.innerHTML = (data.agents || [])
+      .map(a => `<option value="${a.id}"${a.id === AGENT_ID ? ' selected' : ''}>${a.name}</option>`)
+      .join('');
+    // Apply current agent UI
+    const agent = _loadedAgents[AGENT_ID];
+    if (agent) applyAgentUI(agent);
   } catch(e) {
-    // Backend not running — show a helpful message
-    showError('Cannot connect to backend. Run: cd backend && uvicorn main:app --reload --port 8000');
+    showError('Cannot connect to backend. Run: uvicorn backend.main:app --reload --port 8000');
   }
 })();
 </script>
