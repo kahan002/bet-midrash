@@ -28,6 +28,7 @@ class RashiAgent(CommentatorAgent):
             ],
             en_translation_label="Silbermann",
             show_translation_caveat=False,
+            can_read=[],  # Rashi predates all other commentators in this tool
         ))
 
     def system_prompt(self) -> str:

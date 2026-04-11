@@ -32,6 +32,7 @@ class RashbamAgent(CommentatorAgent):
             ],
             en_translation_label="Munk",
             show_translation_caveat=True,  # Munk occasionally paraphrases or omits
+            can_read=["rashi"],            # Rashbam read Rashi — his grandfather
         ))
 
     def system_prompt(self) -> str:

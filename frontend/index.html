@@ -296,7 +296,7 @@ const API = window.location.hostname === '127.0.0.1' || window.location.hostname
   ? 'http://localhost:8000'
   : '';  // same-origin in production
 
-let AGENT_ID = 'rashbam'; // default, updated by switcher
+let AGENT_ID = 'rashi'; // default — init block sets to 'rashi' once agents load
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentRef = '';
@@ -389,7 +389,8 @@ async function loadPassage(ref) {
     applyMode();
 
     // Ask Rashbam to acknowledge the passage
-    await callAgent(`The passage ${data.ref} has just been loaded. As Rashbam, briefly acknowledge it and note one or two things of peshat interest, with precise verse references.`, true);
+    const agentName = (_loadedAgents[AGENT_ID] || {}).name || AGENT_ID;
+    await callAgent(`The passage ${data.ref} has just been loaded. As ${agentName}, briefly acknowledge it and note one or two things of interest from your commentary perspective, with precise verse references.`, true);
 
   } catch(e) {
     document.getElementById('sefaria-loading').style.display = 'none';
@@ -433,7 +434,7 @@ async function callAgent(message, silent = false) {
     if (data.clarification_needed) {
       removeTyping(typingId);
       pendingClarification = { originalMessage: sendMessage };
-      addMsg('agent', data.clarification_needed);
+      addMsg('agent', data.clarification_needed, AGENT_ID);
       document.getElementById('send-btn').disabled = false;
       return;
     }
@@ -465,7 +466,7 @@ async function callAgent(message, silent = false) {
     }
 
     removeTyping(typingId);
-    addMsg('agent', data.response);
+    addMsg('agent', data.response, AGENT_ID);
   } catch(e) {
     removeTyping(typingId);
     showError('Could not reach server: ' + e.message);
@@ -495,16 +496,29 @@ function autoResize(el) {
 }
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
-function addMsg(role, text) {
-  const msgs = document.getElementById('messages');
-  const div = document.createElement('div');
+function addMsg(role, text, agentId) {
+  // agentId is the specific agent ('rashi', 'rashbam') — used for labeling/color.
+  // Falls back to current AGENT_ID if not provided.
+  const aid   = agentId || (role === 'agent' ? AGENT_ID : null);
+  const agent = aid ? (_loadedAgents[aid] || null) : null;
+  const msgs  = document.getElementById('messages');
+  const div   = document.createElement('div');
   div.className = 'msg' + (role === 'user' ? ' user' : '');
-  const avatar = role === 'agent'
-    ? `<div class="avatar agent" style="background:var(--agent-color)">ר</div>`
-    : `<div class="avatar user">You</div>`;
-  const name = role === 'agent' ? 'Rashbam' : 'You';
-  // Copy button — text stored as data attribute to avoid encoding issues
-  // with Hebrew characters in inline onclick handlers.
+
+  let avatar, name;
+  if (role === 'agent' && agent) {
+    const color  = agent.color || 'var(--agent-color)';
+    const glyph  = agent.hebrew_name || aid;
+    avatar = `<div class="avatar agent" style="background:${color}">${glyph}</div>`;
+    name   = agent.name;
+  } else if (role === 'agent') {
+    avatar = `<div class="avatar agent" style="background:var(--agent-color)">ר</div>`;
+    name   = 'Agent';
+  } else {
+    avatar = `<div class="avatar user">You</div>`;
+    name   = 'You';
+  }
+
   const copyBtn = `<button class="copy-btn" data-copy="">Copy</button>`;
   div.innerHTML = `${avatar}<div class="msg-body"><div class="msg-name">${name}</div><div class="msg-text">${fmt(text)}</div>${copyBtn}</div>`;
   div.querySelector('.copy-btn').dataset.copy = text;
@@ -560,12 +574,16 @@ function copyConversation(event) {
 
 let typingN = 0;
 function addTyping() {
-  const id = 'typing-' + (++typingN);
-  const msgs = document.getElementById('messages');
-  const div = document.createElement('div');
+  const id    = 'typing-' + (++typingN);
+  const agent = _loadedAgents[AGENT_ID];
+  const color = agent ? agent.color : 'var(--agent-color)';
+  const glyph = agent ? agent.hebrew_name : 'ר';
+  const name  = agent ? agent.name : 'Agent';
+  const msgs  = document.getElementById('messages');
+  const div   = document.createElement('div');
   div.className = 'msg'; div.id = id;
-  div.innerHTML = `<div class="avatar agent" style="background:var(--agent-color)">ר</div>
-    <div class="msg-body"><div class="msg-name">Rashbam</div>
+  div.innerHTML = `<div class="avatar agent" style="background:${color}">${glyph}</div>
+    <div class="msg-body"><div class="msg-name">${name}</div>
     <div class="tdots"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div></div>`;
   msgs.appendChild(div);
   msgs.scrollTop = msgs.scrollHeight;
@@ -589,23 +607,15 @@ function hideError() {
 
 // ── Agent switching ───────────────────────────────────────────────────────────
 function switchAgent(agentId) {
+  if (agentId === AGENT_ID) return; // no-op if already selected
   AGENT_ID = agentId;
-  // Reset conversation and text pane
-  currentRef = '';
   pendingClarification = null;
-  document.getElementById('messages').innerHTML = '';
-  document.getElementById('verses-container').innerHTML = '';
-  document.getElementById('verses-container').style.display = 'none';
-  document.getElementById('placeholder').style.display = 'flex';
-  document.getElementById('ref-input').value = '';
-  document.getElementById('ref-label').textContent = '';
-  document.getElementById('ctx-label').textContent = '';
-  document.getElementById('ctx-bar').style.display = 'none';
-  // Update UI from agent metadata already loaded
+  // Update UI to reflect active agent — text pane and history persist
   const agent = _loadedAgents[agentId];
   if (agent) applyAgentUI(agent);
-  // Trigger welcome message
-  callAgent(`Introduce yourself briefly as ${agent ? agent.name : agentId}.`, true);
+  // Introduce the newly selected agent into the shared conversation
+  const name = agent ? agent.name : agentId;
+  callAgent(`Introduce yourself briefly as ${name}, noting that you are now joining this conversation.`, true);
 }
 
 let _loadedAgents = {};
@@ -613,36 +623,54 @@ let _loadedAgents = {};
 function applyAgentUI(agent) {
   document.documentElement.style.setProperty('--agent-color', agent.color);
   document.getElementById('agent-glyph').textContent = agent.hebrew_name;
-  document.querySelector('#header-title').textContent = agent.name + ' Study Companion';
+  document.querySelector('#header-title').textContent = 'Torah Study Companion';
   document.querySelector('#header-sub').textContent =
-    agent.full_name + ' · ' + agent.tradition;
-  // Update pane headers
+    'Ask · ' + Object.values(_loadedAgents).map(a => a.name).join(' · ');
+  // Update pane header to show whose text is active
   document.querySelector('#text-pane .pane-head span').textContent =
     agent.name + "'s text · Sefaria";
   document.querySelector('#chat-pane .pane-head span').textContent =
-    'Ask ' + agent.name;
+    'Conversation';
   // Update placeholder
-  document.querySelector('.he-big').textContent = agent.hebrew_name;
-  document.querySelector('#placeholder div:nth-child(2)').textContent =
+  const heBig = document.querySelector('.he-big');
+  if (heBig) heBig.textContent = agent.hebrew_name;
+  const phText = document.querySelector('#placeholder div:nth-child(2)');
+  if (phText) phText.textContent =
     `Enter a reference above to load ${agent.name}'s commentary from Sefaria`;
 }
 
-// ── Init: load agent metadata ─────────────────────────────────────────────────
+// ── Init: load agent metadata and fire opening intro ─────────────────────────
 (async () => {
   try {
     const resp = await fetch(`${API}/api/agents`);
     if (!resp.ok) return;
     const data = await resp.json();
+
     // Store all agents
     (data.agents || []).forEach(a => { _loadedAgents[a.id] = a; });
-    // Populate dropdown
+
+    // Default to Rashi (earlier historically) if available
+    if (_loadedAgents['rashi']) AGENT_ID = 'rashi';
+
+    // Populate dropdown with agents in chronological order
+    const order = ['rashi', 'rashbam', 'ibn_ezra', 'ramban'];
+    const sorted = (data.agents || []).sort((a, b) => {
+      const ai = order.indexOf(a.id), bi = order.indexOf(b.id);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+    });
     const sel = document.getElementById('agent-select');
-    sel.innerHTML = (data.agents || [])
+    sel.innerHTML = sorted
       .map(a => `<option value="${a.id}"${a.id === AGENT_ID ? ' selected' : ''}>${a.name}</option>`)
       .join('');
+
     // Apply current agent UI
     const agent = _loadedAgents[AGENT_ID];
     if (agent) applyAgentUI(agent);
+
+    // Fire opening introduction
+    const name = agent ? agent.name : AGENT_ID;
+    callAgent(`Introduce yourself as ${name}.`, true);
+
   } catch(e) {
     showError('Cannot connect to backend. Run: uvicorn backend.main:app --reload --port 8000');
   }

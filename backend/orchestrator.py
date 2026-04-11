@@ -10,7 +10,7 @@ Process for ask():
 import json
 import asyncio
 from typing import Optional
-from .agents import get_agent, build_fetch_tool_schema, get_all_configs
+from .agents import get_agent, build_fetch_tool_schema, get_all_configs, list_agents as list_all_agents
 from .services import conversation as conv_store
 from .services import sefaria as sefaria_svc
 from .services import llm_client
@@ -144,7 +144,16 @@ async def ask(
     Step 3: Build agent response with all verified text injected
     """
     agent = get_agent(agent_id)
-    history = conv_store.get_history(session_id, agent_id)
+
+    # Build agent name map for conversation attribution
+    all_agents = {c.id: c.name for c in get_all_configs()}
+
+    # Get shared conversation history formatted for this agent's LLM call
+    history = conv_store.build_llm_messages(
+        session_id,
+        current_agent_id=agent_id,
+        agent_names=all_agents,
+    )
 
     # ── Step 1: identify verses and Rashi refs ────────────────────────────────
     detected_ref = sefaria_svc.parse_ref(user_message)
@@ -282,6 +291,40 @@ async def ask(
         auto_fetched_verse=auto_fetched_verse,
     )
 
+    # ── Inject epistemic context about other agents in the conversation ───────
+    # Tell each agent which other commentators it can historically have read,
+    # so it frames cross-agent responses with appropriate epistemic humility.
+    shared_history = conv_store.get_shared_history(session_id)
+    other_agents_present = set(
+        msg["agent_id"] for msg in shared_history
+        if msg["role"] == "agent" and msg["agent_id"] != agent_id
+    )
+    if other_agents_present:
+        can_read = set(agent.config.can_read)
+        counterfactual = other_agents_present - can_read
+        grounded = other_agents_present & can_read
+        notes = []
+        if grounded:
+            names = [all_agents.get(a, a) for a in grounded]
+            notes.append(
+                f"You have historically read {', '.join(names)} — "
+                f"you may engage with their comments directly."
+            )
+        if counterfactual:
+            names = [all_agents.get(a, a) for a in counterfactual]
+            notes.append(
+                f"You could not have read {', '.join(names)} — "
+                f"their commentary postdates you. When responding to their "
+                f"comments in this conversation, acknowledge explicitly that "
+                f"you are reasoning about what you would have said, not "
+                f"claiming you actually read their work."
+            )
+        if notes:
+            system += (
+                "\n\n══ OTHER COMMENTATORS IN THIS CONVERSATION ══\n"
+                + "\n".join(notes)
+            )
+
     # Use tool-enabled completion for the agent response
     fetch_tool = build_fetch_tool_schema()
     response, tool_calls = await llm_client.complete_with_tools(
@@ -291,8 +334,8 @@ async def ask(
         tool_executor=tool_executor,
     )
 
-    conv_store.append(session_id, agent_id, "user", user_message)
-    conv_store.append(session_id, agent_id, "assistant", response)
+    conv_store.append_user(session_id, user_message)
+    conv_store.append_agent(session_id, agent_id, response)
 
     # Collect refs fetched via tool calls for the frontend text pane
     tool_fetched_refs = [

@@ -30,6 +30,8 @@ class AgentConfig:
                                          # (lowercase substrings of versionTitle)
     en_translation_label: str            # human-readable label, e.g. 'Munk'
     show_translation_caveat: bool        # True if translation sometimes paraphrases/omits
+    can_read: list[str]                  # agent ids this commentator could historically
+                                         # have read. Used to flag counterfactual responses.
 
 
 class CommentatorAgent(ABC):

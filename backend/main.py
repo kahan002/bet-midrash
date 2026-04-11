@@ -160,15 +160,14 @@ async def debate(
 
 # ── History ───────────────────────────────────────────────────────────────────
 
-@app.delete("/api/history/{agent_id}")
+@app.delete("/api/history")
 def clear_history(
-    agent_id: str,
     response: Response,
     session_id: Optional[str] = Cookie(default=None),
 ):
-    """Clear conversation history for one agent in this session."""
+    """Clear the full shared conversation history for this session."""
     sid = get_or_create_session(response, session_id)
-    conv_store.clear(sid, agent_id)
+    conv_store.clear_session(sid)
     return {"cleared": True}
 
 
