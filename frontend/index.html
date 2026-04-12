@@ -53,6 +53,35 @@ body {
 #header-title { font-family: 'Crimson Pro', serif; font-size: 19px; font-weight: 500; }
 #header-sub { font-size: 11px; color: var(--text2); margin-top: 1px; font-family: sans-serif; }
 
+/* ── Agent segmented control ── */
+#agent-switcher {
+  margin-left: auto;
+  display: flex;
+  border: 0.5px solid var(--border2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+#agent-switcher input[type="radio"] { display: none; }
+#agent-switcher label {
+  padding: 5px 12px;
+  font-size: 12px;
+  font-family: sans-serif;
+  color: var(--text2);
+  cursor: pointer;
+  border-right: 0.5px solid var(--border2);
+  background: transparent;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  user-select: none;
+}
+#agent-switcher label:last-of-type { border-right: none; }
+#agent-switcher input[type="radio"]:checked + label {
+  background: var(--agent-color);
+  color: #fff;
+  font-weight: 500;
+}
+
 #ref-bar {
   display: flex; gap: 8px; padding: 8px 20px;
   border-bottom: 0.5px solid var(--border);
@@ -204,26 +233,17 @@ body {
   <div id="header">
     <div id="agent-glyph">ר</div>
     <div>
-      <div id="header-title">Rashbam Study Companion</div>
-      <div id="header-sub">Rabbi Shmuel ben Meir · Peshat Commentary on Torah</div>
+      <div id="header-title">Torah Study Companion</div>
+      <div id="header-sub">Medieval Commentators</div>
     </div>
-    <select id="agent-select" onchange="switchAgent(this.value)" style="
-      margin-left:auto; font-family:sans-serif; font-size:12px;
-      background:var(--bg2); color:var(--text2); border:0.5px solid var(--border2);
-      border-radius:4px; padding:4px 8px; cursor:pointer;
-    ">
-      <option value="rashbam">Rashbam</option>
-      <option value="rashi">Rashi</option>
-    </select>
+    <div id="agent-switcher">
+      <!-- Populated dynamically by init — one radio+label per agent -->
+    </div>
   </div>
 
   <div id="ref-bar">
     <input id="ref-input" type="text" placeholder="e.g. Genesis 32:24  or  Exodus 21:1-10" onkeydown="if(event.key==='Enter')loadRef()" />
     <button class="ref-btn" onclick="loadRef()">Load text</button>
-    <button class="qref" onclick="loadQuick('Genesis 32:24-33')">Jacob's wrestling</button>
-    <button class="qref" onclick="loadQuick('Genesis 1:1-5')">Bereshit</button>
-    <button class="qref" onclick="loadQuick('Exodus 21:1-10')">Mishpatim</button>
-    <button class="qref" onclick="loadQuick('Genesis 37:1-5')">Joseph narrative</button>
   </div>
 
   <div id="main">
@@ -267,11 +287,6 @@ body {
             <div class="msg-text">
               <p>Welcome. This is a Torah study session with the medieval commentators.</p>
               <p>Select a commentator from the dropdown above and ask a question, or load a passage on the left. You can bring multiple commentators into the same conversation — their responses will appear together in a shared timeline.</p>
-            </div>
-            <div class="chips">
-              <button class="chip" onclick="sendMsg('How does your approach to peshat differ from the other commentators? Give a specific example.')">How does your approach differ?</button>
-              <button class="chip" onclick="sendMsg('What is really happening in Genesis 32:24-33 — the wrestling at the Jabbok? Who is the figure Jacob fights?')">What really happened at Jacob\'s wrestling?</button>
-              <button class="chip" onclick="sendMsg('Give a specific example where your peshat reading of a Torah law conflicts with how the rabbis practice that law halakhically.')">Where do you depart from rabbinic halakha?</button>
             </div>
           </div>
         </div>
@@ -608,13 +623,16 @@ function hideError() {
 
 // ── Agent switching ───────────────────────────────────────────────────────────
 function switchAgent(agentId) {
-  if (agentId === AGENT_ID) return; // no-op if already selected
+  if (agentId === AGENT_ID) return;
   AGENT_ID = agentId;
   pendingClarification = null;
-  // Update UI to reflect active agent — text pane and history persist
+  // Check the corresponding radio button
+  const radio = document.getElementById('radio-' + agentId);
+  if (radio) radio.checked = true;
+  // Update UI
   const agent = _loadedAgents[agentId];
   if (agent) applyAgentUI(agent);
-  // Introduce the newly selected agent into the shared conversation
+  // Introduce into shared conversation
   const name = agent ? agent.name : agentId;
   callAgent(`Introduce yourself briefly as ${name}, noting that you are now joining this conversation.`, true);
 }
@@ -626,12 +644,15 @@ function applyAgentUI(agent) {
   document.getElementById('agent-glyph').textContent = agent.hebrew_name;
   document.querySelector('#header-title').textContent = 'Torah Study Companion';
   document.querySelector('#header-sub').textContent =
-    'Ask · ' + Object.values(_loadedAgents).map(a => a.name).join(' · ');
+    Object.values(_loadedAgents).map(a => a.name).join(' · ');
   // Update pane header to show whose text is active
   document.querySelector('#text-pane .pane-head span').textContent =
     agent.name + "'s text · Sefaria";
   document.querySelector('#chat-pane .pane-head span').textContent =
     'Conversation';
+  // Ensure the correct radio is checked (handles programmatic switches)
+  const radio = document.getElementById('radio-' + agent.id);
+  if (radio) radio.checked = true;
   // Update placeholder
   const heBig = document.querySelector('.he-big');
   if (heBig) heBig.textContent = agent.hebrew_name;
@@ -653,16 +674,19 @@ function applyAgentUI(agent) {
     // Default to Rashi (earlier historically) if available
     if (_loadedAgents['rashi']) AGENT_ID = 'rashi';
 
-    // Populate dropdown with agents in chronological order
+    // Populate segmented control in chronological order
     const order = ['rashi', 'rashbam', 'ibn_ezra', 'ramban'];
     const sorted = (data.agents || []).sort((a, b) => {
       const ai = order.indexOf(a.id), bi = order.indexOf(b.id);
       return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
     });
-    const sel = document.getElementById('agent-select');
-    sel.innerHTML = sorted
-      .map(a => `<option value="${a.id}"${a.id === AGENT_ID ? ' selected' : ''}>${a.name}</option>`)
-      .join('');
+    const switcher = document.getElementById('agent-switcher');
+    switcher.innerHTML = sorted.map(a => `
+      <input type="radio" name="agent" id="radio-${a.id}" value="${a.id}"
+        ${a.id === AGENT_ID ? 'checked' : ''}
+        onchange="switchAgent(this.value)">
+      <label for="radio-${a.id}">${a.name}</label>
+    `).join('');
 
     // Apply current agent UI
     const agent = _loadedAgents[AGENT_ID];
