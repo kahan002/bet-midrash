@@ -286,7 +286,8 @@ async def fetch_passage(
 async def execute_fetch_tool(
     ref: str,
     source: str,
-    agent_configs: dict,  # {agent_id: AgentConfig} — from registry
+    agent_configs: dict,      # {agent_id: AgentConfig} — from registry
+    midrash_sources: dict,    # {source_id: {sefaria_name, display_name}} — from agents registry
 ) -> dict:
     """
     Execute a fetch_sefaria tool call from the agent.
@@ -363,6 +364,51 @@ async def execute_fetch_tool(
                 "translation_label": result["commentary"]["en_translation_label"],
                 "show_translation_caveat": config.show_translation_caveat,
                 "context_string": result["context_string"],
+            }
+
+        elif source in midrash_sources:
+            midrash = midrash_sources[source]
+            # Midrash refs use their own numbering — pass the ref as-is,
+            # with the Sefaria name prepended.
+            # The agent should provide refs like "1:1" or "3:4" and we
+            # prepend the midrash name: "Bereishit Rabbah 1:1"
+            sefaria_name = midrash["sefaria_name"]
+            # If the agent already included the midrash name, use as-is;
+            # otherwise prepend it.
+            if ref.strip().lower().startswith(sefaria_name.lower()):
+                full_ref = ref.strip()
+            else:
+                full_ref = f"{sefaria_name} {ref.strip()}"
+            sefaria_ref = full_ref.replace(" ", "_").replace(":", ".")
+            data = await fetch_text(sefaria_ref)
+            if not data["found"]:
+                return {
+                    "status": "not_found",
+                    "ref": full_ref,
+                    "source": source,
+                    "ref_valid": False,
+                    "message": (
+                        f"'{full_ref}' not found on Sefaria. "
+                        f"Check the section/paragraph numbering."
+                    ),
+                }
+            he = " ".join(data["he_clean"])
+            en = " ".join(data["en_clean"])
+            lines = []
+            for i, h in enumerate(data["he"]):
+                e = data["en"][i] if i < len(data["en"]) else None
+                if h: lines.append(f"He: {h}")
+                if e: lines.append(f"En: {e}")
+            return {
+                "status": "found",
+                "ref": full_ref,
+                "source": source,
+                "text_he": he,
+                "text_en": en,
+                "context_string": (
+                    f"{midrash['display_name']} {ref} (from Sefaria):\n"
+                    + "\n".join(lines)
+                ),
             }
 
         else:
