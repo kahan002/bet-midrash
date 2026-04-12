@@ -19,7 +19,7 @@ from .services import llm_client
 # Rashi is fetched for every verse because ~50% of Rashbam is direct
 # response to specific Rashi comments. Having the actual text lets the
 # agent engage precisely rather than working from memory.
-REF_EXTRACTION_SYSTEM = """You are a Torah reference extractor for a Rashbam commentary study tool.
+REF_EXTRACTION_SYSTEM = """You are a Torah reference extractor for a multi-commentator Torah study tool.
 
 Given a question or message about Torah, return a JSON object with:
 1. "verses" — array of objects, each with:
@@ -29,9 +29,13 @@ Given a question or message about Torah, return a JSON object with:
 2. "rashi" — array of strings: corresponding Rashi refs (prefixed "Rashi on ")
 3. "words" — key Hebrew words worth concordance lookup (max 3, unvowelised)
 4. "clarification_needed": (only if any verse has confidence "low" or question is ambiguous)
-   A single focused question written as Rashbam would ask it — first person, warmly scholarly.
+   A single focused question asking the student to clarify — first person, warmly scholarly.
    Example: "Before I answer — when you ask about ben sorer u'moreh, do you mean the plain
    text of Deuteronomy 21, or the talmudic elaboration of this law?"
+
+If the message is NOT a Torah question (e.g. a greeting, an introduction request, or
+a meta question about the tool), return an empty result with no verses:
+{"verses": [], "rashi": [], "words": []}
 
 RABBINIC TERM GLOSSARY — these are HIGH confidence mappings:
 - ba bamachteret / הבא במחתרת / tunneling burglar → Exodus 22:1-2
@@ -54,8 +58,8 @@ Mark confidence "low" when:
 Example for clear question:
 {"verses": [{"ref": "Exodus 22:1-2", "confidence": "high"}], "rashi": ["Rashi on Exodus 22:1"], "words": ["מַחְתֶּרֶת"]}
 
-Example for ambiguous question:
-{"verses": [{"ref": "Deuteronomy 21:18-21", "confidence": "low", "ambiguity": "mainly talmudic concept"}], "rashi": ["Rashi on Deuteronomy 21:18"], "words": ["סוֹרֵר"], "clarification_needed": "Before I answer — when you ask about ben sorer u'moreh, do you mean the plain text of Deuteronomy 21, or the talmudic elaboration?"}
+Example for non-Torah message (greeting, intro request, etc.):
+{"verses": [], "rashi": [], "words": []}
 
 Rules:
 - Only include Torah passages (Genesis through Deuteronomy)
@@ -135,12 +139,17 @@ async def ask(
     agent_id: str,
     user_message: str,
     loaded_ref: Optional[str] = None,
+    silent: bool = False,
 ) -> dict:
     """
     Send a question to a single commentator agent.
 
-    Step 1: Extract verse refs + Rashi refs (one LLM call)
-    Step 2: Fetch Rashbam passages + Rashi in parallel from Sefaria
+    silent=True skips Turn 1 ref extraction — used for passage acknowledgments,
+    agent introductions, and other system-generated messages that don't need
+    verse identification. The agent answers directly from existing context.
+
+    Step 1: Extract verse refs + Rashi refs (one LLM call) — skipped if silent
+    Step 2: Fetch passages + Rashi in parallel from Sefaria — skipped if silent
     Step 3: Build agent response with all verified text injected
     """
     agent = get_agent(agent_id)
@@ -154,6 +163,37 @@ async def ask(
         current_agent_id=agent_id,
         agent_names=all_agents,
     )
+
+    # ── Silent path: skip extraction and fetching, answer directly ────────────
+    if silent:
+        system, messages = agent.build_messages(
+            user_message=user_message,
+            conversation_history=history,
+            sefaria_context=None,
+            auto_fetched_verse=None,
+        )
+        fetch_tool = build_fetch_tool_schema()
+        all_configs = {c.id: c for c in get_all_configs()}
+        async def tool_executor_silent(tool_name, tool_input):
+            return await sefaria_svc.execute_fetch_tool(
+                tool_input.get("ref", ""), tool_input.get("source", ""),
+                all_configs, MIDRASH_SOURCES,
+            )
+        response, tool_calls = await llm_client.complete_with_tools(
+            system=system, messages=messages,
+            tools=[fetch_tool], tool_executor=tool_executor_silent,
+        )
+        conv_store.append_user(session_id, user_message)
+        conv_store.append_agent(session_id, agent_id, response)
+        return {
+            "agent_id": agent_id,
+            "response": response,
+            "clarification_needed": None,
+            "retrieved_refs": [],
+            "retrieved_rashi": [],
+            "retrieved_words": [],
+            "tool_calls": tool_calls,
+        }
 
     # ── Step 1: identify verses and Rashi refs ────────────────────────────────
     detected_ref = sefaria_svc.parse_ref(user_message)
