@@ -261,16 +261,16 @@ body {
       </div>
       <div id="messages">
         <div class="msg">
-          <div class="avatar agent" style="background:var(--agent-color)">ר</div>
+          <div class="avatar agent" style="background:#4a5568;font-size:11px;font-family:sans-serif;">בית</div>
           <div class="msg-body">
-            <div class="msg-name">Rashbam</div>
+            <div class="msg-name" style="color:var(--text2)">Bet Midrash</div>
             <div class="msg-text">
-              <p>Shalom. I am Shmuel ben Meir — called Rashbam — grandson of Rashi, of blessed memory.</p>
-              <p>My life's work has been the plain sense of Torah, the <em>peshat</em>, which my grandfather left too often aside in favor of midrash. Load any passage on the left, or ask me directly.</p>
+              <p>Welcome. This is a Torah study session with the medieval commentators.</p>
+              <p>Select a commentator from the dropdown above and ask a question, or load a passage on the left. You can bring multiple commentators into the same conversation — their responses will appear together in a shared timeline.</p>
             </div>
             <div class="chips">
-              <button class="chip" onclick="sendMsg('How does your approach to peshat differ from Rashi\\'s? Give a specific example.')">How does your approach differ from Rashi's?</button>
-              <button class="chip" onclick="sendMsg('What is really happening in Genesis 32:24-33 — the wrestling at the Jabbok? Who is the figure Jacob fights?')">What really happened at Jacob\\'s wrestling?</button>
+              <button class="chip" onclick="sendMsg('How does your approach to peshat differ from the other commentators? Give a specific example.')">How does your approach differ?</button>
+              <button class="chip" onclick="sendMsg('What is really happening in Genesis 32:24-33 — the wrestling at the Jabbok? Who is the figure Jacob fights?')">What really happened at Jacob\'s wrestling?</button>
               <button class="chip" onclick="sendMsg('Give a specific example where your peshat reading of a Torah law conflicts with how the rabbis practice that law halakhically.')">Where do you depart from rabbinic halakha?</button>
             </div>
           </div>
@@ -296,7 +296,7 @@ const API = window.location.hostname === '127.0.0.1' || window.location.hostname
   ? 'http://localhost:8000'
   : '';  // same-origin in production
 
-let AGENT_ID = 'rashi'; // default — init block sets to 'rashi' once agents load
+let AGENT_ID = 'rashbam'; // placeholder — init sets this to 'rashi' once agents load
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentRef = '';
@@ -639,7 +639,7 @@ function applyAgentUI(agent) {
     `Enter a reference above to load ${agent.name}'s commentary from Sefaria`;
 }
 
-// ── Init: load agent metadata and fire opening intro ─────────────────────────
+// ── Init: load agent metadata ─────────────────────────────────────────────────
 (async () => {
   try {
     const resp = await fetch(`${API}/api/agents`);
@@ -666,10 +666,6 @@ function applyAgentUI(agent) {
     // Apply current agent UI
     const agent = _loadedAgents[AGENT_ID];
     if (agent) applyAgentUI(agent);
-
-    // Fire opening introduction
-    const name = agent ? agent.name : AGENT_ID;
-    callAgent(`Introduce yourself as ${name}.`, true);
 
   } catch(e) {
     showError('Cannot connect to backend. Run: uvicorn backend.main:app --reload --port 8000');
