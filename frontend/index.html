@@ -629,12 +629,9 @@ function switchAgent(agentId) {
   // Check the corresponding radio button
   const radio = document.getElementById('radio-' + agentId);
   if (radio) radio.checked = true;
-  // Update UI
+  // Update UI — history and text pane persist
   const agent = _loadedAgents[agentId];
   if (agent) applyAgentUI(agent);
-  // Introduce into shared conversation
-  const name = agent ? agent.name : agentId;
-  callAgent(`Introduce yourself briefly as ${name}, noting that you are now joining this conversation.`, true);
 }
 
 let _loadedAgents = {};
