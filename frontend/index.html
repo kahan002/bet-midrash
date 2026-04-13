@@ -421,7 +421,7 @@ async function loadPassage(ref) {
     applyMode();
 
     // Ask the active agent to acknowledge the passage
-    const agentName = (_loadedAgents[AGENT_ID] || {}).name || AGENT_ID;
+    //const agentName = (_loadedAgents[AGENT_ID] || {}).name || AGENT_ID;
     await callAgent(`The passage ${data.ref} has just been loaded. As ${agentName}, briefly acknowledge it and note one or two things of interest from your commentary perspective, with precise verse references.`, true);
 
   } catch(e) {
