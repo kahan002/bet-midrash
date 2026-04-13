@@ -67,6 +67,60 @@ Rules:
 - The rashi array should mirror the verses array (use ref strings)
 - Return ONLY the JSON object, no other text"""
 
+SUMMARIZATION_SYSTEM = """You are summarizing a Torah study conversation for context compression.
+The conversation involves medieval Jewish commentators (Rashi, Rashbam, etc.) and a student.
+
+Produce a concise summary that preserves:
+- Which biblical passages were discussed, with exact references
+- The specific scholarly position each commentator took on each passage
+- Any explicit disagreements between commentators, and what they turned on
+- The student's questions and the thread of inquiry
+
+Do NOT preserve:
+- Greetings, pleasantries, or meta-conversation about the tool
+- Verbatim quotes (paraphrase positions instead)
+- Repetition of points already well-established
+
+Format: 2-4 short paragraphs. Be precise about verse references and attributions.
+Write in third person: "Rashi argued that...", "Rashbam disagreed, reading...", "The student asked about..."."""
+
+
+async def summarize_conversation(session_id: str, agent_names: dict[str, str]) -> str:
+    """
+    Compress the older portion of the conversation into a summary paragraph.
+    Called when needs_summarization() returns True, before building the LLM messages.
+    Returns the summary string (which is then stored via conv_store.set_summary).
+    """
+    messages = conv_store.get_shared_history(session_id)
+    existing_summary = conv_store.get_summary(session_id)
+
+    # Build a readable transcript for the summarizer
+    lines = []
+    if existing_summary:
+        lines.append(f"[Earlier summary: {existing_summary}]")
+        lines.append("")
+
+    for msg in messages:
+        if msg["role"] == "user":
+            lines.append(f"Student: {msg['content']}")
+        elif msg["role"] == "agent":
+            name = agent_names.get(msg["agent_id"], msg["agent_id"])
+            lines.append(f"{name}: {msg['content']}")
+
+    transcript = "\n\n".join(lines)
+
+    try:
+        summary = llm_client.complete(
+            system=SUMMARIZATION_SYSTEM,
+            messages=[{"role": "user", "content": transcript}],
+            max_tokens=600,
+        )
+        return summary.strip()
+    except Exception as e:
+        print(f"[summarization] failed: {e}")
+        # Return a minimal fallback so the conversation can continue
+        return f"[Summary unavailable — earlier conversation covered {len(messages)} exchanges]"
+
 
 async def extract_relevant_refs(user_message: str) -> dict:
     """
@@ -157,6 +211,13 @@ async def ask(
     # Build agent name map for conversation attribution
     all_agents = {c.id: c.name for c in get_all_configs()}
 
+    # ── Summarize if conversation is getting long ─────────────────────────────
+    summarized = False
+    if conv_store.needs_summarization(session_id):
+        summary = await summarize_conversation(session_id, all_agents)
+        conv_store.set_summary(session_id, summary)
+        summarized = True
+
     # Get shared conversation history formatted for this agent's LLM call
     history = conv_store.build_llm_messages(
         session_id,
@@ -193,6 +254,7 @@ async def ask(
             "retrieved_rashi": [],
             "retrieved_words": [],
             "tool_calls": tool_calls,
+            "summarized": summarized,
         }
 
     # ── Step 1: identify verses and Rashi refs ────────────────────────────────
@@ -391,6 +453,7 @@ async def ask(
         "retrieved_rashi": all_rashi_refs,
         "retrieved_words": all_words,
         "tool_calls": tool_calls,
+        "summarized": summarized,
     }
 
 

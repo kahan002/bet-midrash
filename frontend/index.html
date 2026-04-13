@@ -163,6 +163,16 @@ body {
 
 .msg { display: flex; gap: 10px; align-items: flex-start; }
 .msg.user { flex-direction: row-reverse; }
+.msg.system {
+  justify-content: center;
+  padding: 4px 0;
+}
+.msg.system .system-notice {
+  font-size: 11px; font-family: sans-serif; color: var(--text2);
+  font-style: italic; padding: 4px 12px;
+  border: 0.5px solid var(--border); border-radius: 20px;
+  background: var(--bg2);
+}
 .avatar {
   width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
@@ -482,6 +492,12 @@ async function callAgent(message, silent = false) {
     }
 
     removeTyping(typingId);
+
+    // If the conversation was summarized to make room, show a notice
+    if (data.summarized) {
+      addSystemMsg('Earlier conversation summarized to continue the session.');
+    }
+
     addMsg('agent', data.response, AGENT_ID);
   } catch(e) {
     removeTyping(typingId);
@@ -589,6 +605,15 @@ function copyConversation(event) {
 }
 
 let typingN = 0;
+function addSystemMsg(text) {
+  const msgs = document.getElementById('messages');
+  const div  = document.createElement('div');
+  div.className = 'msg system';
+  div.innerHTML = `<div class="system-notice">${esc(text)}</div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
 function addTyping() {
   const id    = 'typing-' + (++typingN);
   const agent = _loadedAgents[AGENT_ID];
