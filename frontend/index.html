@@ -259,7 +259,7 @@ body {
   <div id="main">
     <div id="text-pane">
       <div class="pane-head">
-        <span>Rashbam's text · Sefaria</span>
+        <span id="text-pane-label">Commentary · Sefaria</span>
         <div style="display:flex;gap:5px;align-items:center">
           <span id="ref-label" style="font-style:italic;font-weight:400;letter-spacing:0;text-transform:none;font-size:11px;margin-right:4px;"></span>
           <button onclick="setMode('both')" id="mode-both" class="mode-btn active-mode">He + En</button>
@@ -269,8 +269,8 @@ body {
       </div>
       <div id="text-scroll">
         <div id="placeholder">
-          <div class="he-big">רשב"ם</div>
-          <div>Enter a reference above to load Rashbam's commentary from Sefaria</div>
+          <div class="he-big">ר</div>
+          <div id="placeholder-text">Enter a reference above to load commentary from Sefaria</div>
           <div style="font-size:11px;margin-top:4px;font-family:sans-serif;">Hebrew and English will appear here</div>
         </div>
         <div id="sefaria-loading">
@@ -283,7 +283,7 @@ body {
 
     <div id="chat-pane">
       <div class="pane-head">
-        <span>Ask Rashbam</span>
+        <span id="chat-pane-label">Conversation</span>
         <div style="display:flex;gap:8px;align-items:center">
           <span id="ctx-label" style="font-style:italic;font-weight:400;letter-spacing:0;text-transform:none;font-size:11px;color:var(--text2);"></span>
           <button onclick="copyConversation(event)" style="padding:2px 10px;font-size:10px;font-family:sans-serif;border:0.5px solid var(--border);border-radius:20px;background:transparent;color:var(--text3);cursor:pointer;" title="Copy full conversation to clipboard">Copy all</button>
@@ -296,7 +296,7 @@ body {
             <div class="msg-name" style="color:var(--text2)">Bet Midrash</div>
             <div class="msg-text">
               <p>Welcome. This is a Torah study session with the medieval commentators.</p>
-              <p>Select a commentator from the dropdown above and ask a question, or load a passage on the left. You can bring multiple commentators into the same conversation — their responses will appear together in a shared timeline.</p>
+              <p>Select a commentator from the radio buttons above and ask a question, or load a passage on the left. You can bring multiple commentators into the same conversation — their responses will appear together in a shared timeline.</p>
             </div>
           </div>
         </div>
@@ -305,7 +305,8 @@ body {
       <div id="error-bar" id="err"></div>
       <div id="input-area">
         <textarea id="chat-input" rows="1"
-          placeholder="Ask about a verse, Rashbam's reasoning, or any passage… (Enter to send)"
+          id="chat-input-area"
+          placeholder="Ask a question about the text… (Enter to send)"
           onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
         <button id="send-btn" onclick="doSend()">Send</button>
       </div>
@@ -321,7 +322,8 @@ const API = window.location.hostname === '127.0.0.1' || window.location.hostname
   ? 'http://localhost:8000'
   : '';  // same-origin in production
 
-let AGENT_ID = 'rashbam'; // placeholder — init sets this to 'rashi' once agents load
+const DEFAULT_PARSHAN = 'rashi'; // chronologically first; init sets AGENT_ID to this
+let AGENT_ID = DEFAULT_PARSHAN;
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentRef = '';
@@ -382,14 +384,15 @@ async function loadPassage(ref) {
     document.getElementById('ref-label').textContent = data.ref;
     document.getElementById('ctx-label').textContent = 'passage: ' + data.ref;
 
-    const bible = data.bible;
-    const comm  = data.commentary;
-    const len = Math.max(comm.en.length, comm.he.length);
+    const bible     = data.bible;
+    const comm      = data.commentary;
+    const len       = Math.max(comm.en.length, comm.he.length);
+    const agentName = (_loadedAgents[AGENT_ID] || {}).name || AGENT_ID;
 
     if (len === 0) {
       container.innerHTML = `<div style="font-style:italic;color:var(--text2);font-size:13px;padding:8px 0;">
-        No Rashbam commentary found for <strong>${esc(data.ref)}</strong> on Sefaria.
-        You can still ask — Rashbam will reason from his principles and flag extrapolation.
+        No ${esc(agentName)} commentary found for <strong>${esc(data.ref)}</strong> on Sefaria.
+        You can still ask — ${esc(agentName)} will reason from principles and flag extrapolation.
       </div>`;
     } else {
       for (let i = 0; i < len; i++) {
@@ -398,10 +401,10 @@ async function loadPassage(ref) {
         let html = `<div class="vref">Verse ${i+1}</div>`;
         if (bible.he[i]) html += `<div class="he-text">${esc(bible.he[i])}</div>`;
         if (bible.en[i]) html += `<div class="verse-en">${esc(bible.en[i])}</div>`;
-        if (comm.he[i])  html += `<div class="sub-lbl sub-lbl-he" style="margin-top:10px">Rashbam (Hebrew)</div><div class="he-text">${esc(comm.he[i])}</div>`;
+        if (comm.he[i])  html += `<div class="sub-lbl sub-lbl-he" style="margin-top:10px">${esc(agentName)} (Hebrew)</div><div class="he-text">${esc(comm.he[i])}</div>`;
         if (comm.en[i]) {
           const titleNote = comm.he_version_title ? ` · ${comm.he_version_title}` : '';
-          html += `<div class="sub-lbl sub-lbl-en">Rashbam (translation${titleNote})</div><div class="rashbam-en">${esc(comm.en[i])}</div>`;
+          html += `<div class="sub-lbl sub-lbl-en">${esc(agentName)} (translation${titleNote})</div><div class="rashbam-en">${esc(comm.en[i])}</div>`;
         }
         b.innerHTML = html;
         container.appendChild(b);
@@ -413,7 +416,7 @@ async function loadPassage(ref) {
     ctxBar.textContent = `Loaded: ${data.ref}`;
     applyMode();
 
-    // Ask Rashbam to acknowledge the passage
+    // Ask the active agent to acknowledge the passage
     const agentName = (_loadedAgents[AGENT_ID] || {}).name || AGENT_ID;
     await callAgent(`The passage ${data.ref} has just been loaded. As ${agentName}, briefly acknowledge it and note one or two things of interest from your commentary perspective, with precise verse references.`, true);
 
@@ -465,22 +468,42 @@ async function callAgent(message, silent = false) {
       return;
     }
 
-    // If the agent made tool calls, show a brief indicator before the response.
-    // Also update the text pane if the agent fetched a new passage for itself.
+    // If the agent made tool calls, update text pane and show attribution.
     if (data.tool_calls && data.tool_calls.length > 0) {
-      const found = data.tool_calls.filter(tc => tc.status === 'found');
-      const ownFetch = found.find(tc => tc.source && tc.source !== 'rashi' && tc.source !== 'bible');
-      if (ownFetch && !currentRef) {
-        // Agent fetched its own commentary — update text pane
+      const agentName = (_loadedAgents[AGENT_ID] || {}).name || AGENT_ID;
+      const found     = data.tool_calls.filter(tc => tc.status === 'found');
+
+      // If agent fetched its own commentary on a new passage, update text pane
+      const ownFetch = found.find(
+        tc => tc.source === AGENT_ID && !currentRef
+      );
+      if (ownFetch) {
         document.getElementById('ref-input').value = ownFetch.ref;
-        loadPassage(ownFetch.ref); // fire and forget
+        loadPassage(ownFetch.ref, true); // suppressAck
       }
-      // Brief "consulted Sefaria" note in ctx-bar
+
+      // Show each fetched source with proper label — "[AgentName] consulted: Rashi on X, Bible Y"
       if (found.length > 0) {
-        const refs = found.map(tc => tc.ref).join(', ');
+        const sourceLabels = {
+          'bible':           'Bible',
+          'rashbam':         'Rashbam',
+          'rashi':           'Rashi',
+          'bereishit_rabbah':'Bereishit Rabbah',
+          'shemot_rabbah':   'Shemot Rabbah',
+          'vayikra_rabbah':  'Vayikra Rabbah',
+          'bamidbar_rabbah': 'Bamidbar Rabbah',
+          'devarim_rabbah':  'Devarim Rabbah',
+        };
+        // Also populate from _loadedAgents in case new agents are added
+        Object.values(_loadedAgents).forEach(a => { sourceLabels[a.id] = a.name; });
+
+        const items = found.map(tc => {
+          const src = sourceLabels[tc.source] || tc.source;
+          return `${src}: ${tc.ref}`;
+        }).join(' · ');
         const bar = document.getElementById('ctx-bar');
         bar.style.display = 'block';
-        bar.textContent = `Rashbam consulted Sefaria: ${refs}`;
+        bar.textContent = `${agentName} consulted Sefaria — ${items}`;
       }
     }
 
@@ -667,18 +690,20 @@ function applyAgentUI(agent) {
   document.querySelector('#header-title').textContent = 'Torah Study Companion';
   document.querySelector('#header-sub').textContent =
     Object.values(_loadedAgents).map(a => a.name).join(' · ');
-  // Update pane header to show whose text is active
-  document.querySelector('#text-pane .pane-head span').textContent =
+  // Pane headers
+  document.getElementById('text-pane-label').textContent =
     agent.name + "'s text · Sefaria";
-  document.querySelector('#chat-pane .pane-head span').textContent =
-    'Conversation';
-  // Ensure the correct radio is checked (handles programmatic switches)
+  document.getElementById('chat-pane-label').textContent = 'Conversation';
+  // Input placeholder
+  document.getElementById('chat-input').placeholder =
+    `Ask ${agent.name} about a verse or passage… (Enter to send)`;
+  // Ensure the correct radio is checked
   const radio = document.getElementById('radio-' + agent.id);
   if (radio) radio.checked = true;
-  // Update placeholder
+  // Placeholder
   const heBig = document.querySelector('.he-big');
   if (heBig) heBig.textContent = agent.hebrew_name;
-  const phText = document.querySelector('#placeholder div:nth-child(2)');
+  const phText = document.getElementById('placeholder-text');
   if (phText) phText.textContent =
     `Enter a reference above to load ${agent.name}'s commentary from Sefaria`;
 }
@@ -694,7 +719,7 @@ function applyAgentUI(agent) {
     (data.agents || []).forEach(a => { _loadedAgents[a.id] = a; });
 
     // Default to Rashi (earlier historically) if available
-    if (_loadedAgents['rashi']) AGENT_ID = 'rashi';
+    if (_loadedAgents[DEFAULT_PARSHAN]) AGENT_ID = DEFAULT_PARSHAN;
 
     // Populate segmented control in chronological order
     const order = ['rashi', 'rashbam', 'ibn_ezra', 'ramban'];
