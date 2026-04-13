@@ -247,7 +247,11 @@ body {
       <div id="header-sub">Medieval Commentators</div>
     </div>
     <div id="agent-switcher">
-      <!-- Populated dynamically by init — one radio+label per agent -->
+      <!-- Static fallback — replaced by init once agents load from API -->
+      <input type="radio" name="agent" id="radio-rashi" value="rashi" checked onchange="switchAgent(this.value)">
+      <label for="radio-rashi">Rashi</label>
+      <input type="radio" name="agent" id="radio-rashbam" value="rashbam" onchange="switchAgent(this.value)">
+      <label for="radio-rashbam">Rashbam</label>
     </div>
   </div>
 
@@ -740,6 +744,7 @@ function applyAgentUI(agent) {
     if (agent) applyAgentUI(agent);
 
   } catch(e) {
+    console.error('[init] Failed to load agents:', e);
     showError('Cannot connect to backend. Run: uvicorn backend.main:app --reload --port 8000');
   }
 })();
