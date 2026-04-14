@@ -263,7 +263,7 @@ body {
   <div id="main">
     <div id="text-pane">
       <div class="pane-head">
-        <span id="text-pane-label">Commentary · Sefaria</span>
+        <span id="text-pane-label">Texts from Sefaria</span>
         <div style="display:flex;gap:5px;align-items:center">
           <span id="ref-label" style="font-style:italic;font-weight:400;letter-spacing:0;text-transform:none;font-size:11px;margin-right:4px;"></span>
           <button onclick="setMode('both')" id="mode-both" class="mode-btn active-mode">He + En</button>
@@ -274,7 +274,7 @@ body {
       <div id="text-scroll">
         <div id="placeholder">
           <div class="he-big">ר</div>
-          <div id="placeholder-text">Enter a reference above to load commentary from Sefaria</div>
+          <div id="placeholder-text">Enter a reference above to load texts from Sefaria</div>
           <div style="font-size:11px;margin-top:4px;font-family:sans-serif;">Hebrew and English will appear here</div>
         </div>
         <div id="sefaria-loading">
@@ -695,8 +695,6 @@ function applyAgentUI(agent) {
   document.querySelector('#header-sub').textContent =
     Object.values(_loadedAgents).map(a => a.name).join(' · ');
   // Pane headers
-  document.getElementById('text-pane-label').textContent =
-    agent.name + "'s text · Sefaria";
   document.getElementById('chat-pane-label').textContent = 'Conversation';
   // Input placeholder
   document.getElementById('chat-input').placeholder =
@@ -708,8 +706,7 @@ function applyAgentUI(agent) {
   const heBig = document.querySelector('.he-big');
   if (heBig) heBig.textContent = agent.hebrew_name;
   const phText = document.getElementById('placeholder-text');
-  if (phText) phText.textContent =
-    `Enter a reference above to load ${agent.name}'s commentary from Sefaria`;
+  if (phText) phText.textContent = 'Enter a reference above to load texts from Sefaria';
 }
 
 // ── Init: load agent metadata ─────────────────────────────────────────────────
