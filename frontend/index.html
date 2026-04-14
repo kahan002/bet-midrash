@@ -306,10 +306,9 @@ body {
         </div>
       </div>
       <div id="ctx-bar"></div>
-      <div id="error-bar" id="err"></div>
+      <div id="error-bar"></div>
       <div id="input-area">
         <textarea id="chat-input" rows="1"
-          id="chat-input-area"
           placeholder="Ask a question about the text… (Enter to send)"
           onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
         <button id="send-btn" onclick="doSend()">Send</button>
@@ -364,7 +363,7 @@ async function loadQuick(ref) {
   await loadPassage(ref);
 }
 
-async function loadPassage(ref) {
+async function loadPassage(ref, silent = false) {
   document.getElementById('placeholder').style.display = 'none';
   document.getElementById('sefaria-loading').style.display = 'flex';
   document.getElementById('verses-container').style.display = 'none';
@@ -388,15 +387,15 @@ async function loadPassage(ref) {
     document.getElementById('ref-label').textContent = data.ref;
     document.getElementById('ctx-label').textContent = 'passage: ' + data.ref;
 
-    const bible     = data.bible;
-    const comm      = data.commentary;
-    const len       = Math.max(comm.en.length, comm.he.length);
-    const agentName = (_loadedAgents[AGENT_ID] || {}).name || AGENT_ID;
+    const bible           = data.bible;
+    const comm            = data.commentary;
+    const len             = Math.max(comm.en.length, comm.he.length);
+    const activeAgentName = (_loadedAgents[AGENT_ID] || {}).name || AGENT_ID;
 
     if (len === 0) {
       container.innerHTML = `<div style="font-style:italic;color:var(--text2);font-size:13px;padding:8px 0;">
-        No ${esc(agentName)} commentary found for <strong>${esc(data.ref)}</strong> on Sefaria.
-        You can still ask — ${esc(agentName)} will reason from principles and flag extrapolation.
+        No ${esc(activeAgentName)} commentary found for <strong>${esc(data.ref)}</strong> on Sefaria.
+        You can still ask — ${esc(activeAgentName)} will reason from principles and flag extrapolation.
       </div>`;
     } else {
       for (let i = 0; i < len; i++) {
@@ -405,10 +404,10 @@ async function loadPassage(ref) {
         let html = `<div class="vref">Verse ${i+1}</div>`;
         if (bible.he[i]) html += `<div class="he-text">${esc(bible.he[i])}</div>`;
         if (bible.en[i]) html += `<div class="verse-en">${esc(bible.en[i])}</div>`;
-        if (comm.he[i])  html += `<div class="sub-lbl sub-lbl-he" style="margin-top:10px">${esc(agentName)} (Hebrew)</div><div class="he-text">${esc(comm.he[i])}</div>`;
+        if (comm.he[i])  html += `<div class="sub-lbl sub-lbl-he" style="margin-top:10px">${esc(activeAgentName)} (Hebrew)</div><div class="he-text">${esc(comm.he[i])}</div>`;
         if (comm.en[i]) {
           const titleNote = comm.he_version_title ? ` · ${comm.he_version_title}` : '';
-          html += `<div class="sub-lbl sub-lbl-en">${esc(agentName)} (translation${titleNote})</div><div class="rashbam-en">${esc(comm.en[i])}</div>`;
+          html += `<div class="sub-lbl sub-lbl-en">${esc(activeAgentName)} (translation${titleNote})</div><div class="rashbam-en">${esc(comm.en[i])}</div>`;
         }
         b.innerHTML = html;
         container.appendChild(b);
@@ -420,9 +419,10 @@ async function loadPassage(ref) {
     ctxBar.textContent = `Loaded: ${data.ref}`;
     applyMode();
 
-    // Ask the active agent to acknowledge the passage
-    //const agentName = (_loadedAgents[AGENT_ID] || {}).name || AGENT_ID;
-    await callAgent(`The passage ${data.ref} has just been loaded. As ${agentName}, briefly acknowledge it and note one or two things of interest from your commentary perspective, with precise verse references.`, true);
+    // Ask the active agent to acknowledge the passage — only on user-initiated loads
+    if (!silent) {
+      await callAgent(`The passage ${data.ref} has just been loaded. As ${activeAgentName}, briefly acknowledge it and note one or two things of interest from your commentary perspective, with precise verse references.`, true);
+    }
 
   } catch(e) {
     document.getElementById('sefaria-loading').style.display = 'none';
@@ -474,7 +474,7 @@ async function callAgent(message, silent = false) {
 
     // If the agent made tool calls, update text pane and show attribution.
     if (data.tool_calls && data.tool_calls.length > 0) {
-      const agentName = (_loadedAgents[AGENT_ID] || {}).name || AGENT_ID;
+      const activeAgentName = (_loadedAgents[AGENT_ID] || {}).name || AGENT_ID;
       const found     = data.tool_calls.filter(tc => tc.status === 'found');
 
       // If agent fetched its own commentary on a new passage, update text pane
@@ -507,7 +507,7 @@ async function callAgent(message, silent = false) {
         }).join(' · ');
         const bar = document.getElementById('ctx-bar');
         bar.style.display = 'block';
-        bar.textContent = `${agentName} consulted Sefaria — ${items}`;
+        bar.textContent = `${activeAgentName} consulted Sefaria — ${items}`;
       }
     }
 
