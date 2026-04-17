@@ -129,7 +129,7 @@ body {
 .mode-btn:hover { color: var(--text); }
 .active-mode { background: var(--bg3); color: var(--text); }
 
-#text-scroll { flex: 1; overflow-y: auto; padding: 16px 14px; min-height: 0; }
+#text-scroll { flex: 1; overflow-y: auto; padding: 8px 10px; min-height: 0; }
 #text-scroll::-webkit-scrollbar { width: 3px; }
 #text-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 
@@ -142,13 +142,44 @@ body {
 .he-big { font-family: 'Noto Serif Hebrew', serif; font-size: 36px; color: var(--border2); margin-bottom: 8px; direction: rtl; }
 #sefaria-loading {
   display: none; flex-direction: column; align-items: center;
-  justify-content: center; height: 100%; gap: 10px;
+  justify-content: center; padding: 20px; gap: 10px;
   color: var(--text2); font-size: 13px; font-style: italic; font-family: sans-serif;
 }
-#verses-container { display: none; }
 
-.verse-block { margin-bottom: 20px; padding-bottom: 20px; border-bottom: 0.5px solid var(--border); min-width: 0; }
-.verse-block:last-child { border-bottom: none; }
+/* ── Source panels ── */
+.source-panel {
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.source-panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 10px; cursor: pointer;
+  background: var(--bg2);
+  user-select: none;
+}
+.source-panel-head:hover { background: var(--bg3); }
+.source-panel-title {
+  font-size: 11px; font-weight: 500; font-family: sans-serif;
+  color: var(--text); letter-spacing: 0.02em;
+}
+.source-panel-controls { display: flex; gap: 6px; align-items: center; }
+.source-panel-toggle {
+  font-size: 10px; color: var(--text2); font-family: sans-serif;
+  padding: 1px 6px; border: 0.5px solid var(--border2);
+  border-radius: 10px; background: transparent; cursor: pointer;
+}
+.source-panel-close {
+  font-size: 12px; color: var(--text2); background: transparent;
+  border: none; cursor: pointer; padding: 0 2px; line-height: 1;
+}
+.source-panel-close:hover { color: var(--text); }
+.source-panel-body { padding: 10px 12px; }
+.source-panel.collapsed .source-panel-body { display: none; }
+
+.verse-block { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 0.5px solid var(--border); min-width: 0; }
+.verse-block:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
 .vref { font-size: 10px; font-weight: 500; color: var(--agent-color); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; font-family: sans-serif; }
 .he-text { font-family: 'Noto Serif Hebrew', serif; direction: rtl; text-align: right; font-size: 15px; line-height: 1.9; color: var(--text); margin-bottom: 8px; overflow-wrap: break-word; }
 .verse-en { font-size: 13px; line-height: 1.65; color: var(--text2); font-style: italic; margin-bottom: 9px; overflow-wrap: break-word; }
@@ -265,7 +296,6 @@ body {
       <div class="pane-head">
         <span id="text-pane-label">Texts from Sefaria</span>
         <div style="display:flex;gap:5px;align-items:center">
-          <span id="ref-label" style="font-style:italic;font-weight:400;letter-spacing:0;text-transform:none;font-size:11px;margin-right:4px;"></span>
           <button onclick="setMode('both')" id="mode-both" class="mode-btn active-mode">He + En</button>
           <button onclick="setMode('he')"   id="mode-he"   class="mode-btn">Hebrew</button>
           <button onclick="setMode('en')"   id="mode-en"   class="mode-btn">English</button>
@@ -281,7 +311,7 @@ body {
           <div class="tdots"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div>
           <span>Loading from Sefaria…</span>
         </div>
-        <div id="verses-container"></div>
+        <div id="sources-stack"></div>
       </div>
     </div>
 
@@ -329,9 +359,13 @@ const DEFAULT_PARSHAN = 'rashi'; // chronologically first; init sets AGENT_ID to
 let AGENT_ID = DEFAULT_PARSHAN;
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let currentRef = '';
-let displayMode = 'both';
-let pendingClarification = null; // { originalMessage } — set when backend requests clarification
+let displayMode       = 'both';
+let pendingClarification = null;
+let _loadingPassage   = false; // loading lock — prevents concurrent fetches
+
+// loadedSources: array of { id, ref, agentId, agentName, bible, commentary, hasCommentary }
+// Each becomes one collapsible panel in the text pane.
+let loadedSources = [];
 
 // ── Display mode ──────────────────────────────────────────────────────────────
 function setMode(mode) {
@@ -352,21 +386,133 @@ function applyMode() {
     el.style.display = displayMode === 'en' ? 'none' : '');
 }
 
+// ── Source panel rendering ────────────────────────────────────────────────────
+function buildVerseHTML(bible, comm, agentName) {
+  const len = Math.max(
+    (comm.en || []).length,
+    (comm.he || []).length,
+    (bible.en || []).length,
+    (bible.he || []).length,
+  );
+  if (len === 0) return '';
+  let html = '';
+  for (let i = 0; i < len; i++) {
+    html += `<div class="verse-block">`;
+    html += `<div class="vref">Verse ${i+1}</div>`;
+    if (bible.he && bible.he[i]) html += `<div class="he-text">${esc(bible.he[i])}</div>`;
+    if (bible.en && bible.en[i]) html += `<div class="verse-en">${esc(bible.en[i])}</div>`;
+    if (comm.he && comm.he[i]) {
+      html += `<div class="sub-lbl sub-lbl-he" style="margin-top:10px">${esc(agentName)} (Hebrew)</div>`;
+      html += `<div class="he-text">${esc(comm.he[i])}</div>`;
+    }
+    if (comm.en && comm.en[i]) {
+      const titleNote = comm.he_version_title ? ` · ${esc(comm.he_version_title)}` : '';
+      html += `<div class="sub-lbl sub-lbl-en">${esc(agentName)} (translation${titleNote})</div>`;
+      html += `<div class="rashbam-en">${esc(comm.en[i])}</div>`;
+    }
+    html += `</div>`;
+  }
+  return html;
+}
+
+function renderSourcePanel(source) {
+  const panel = document.createElement('div');
+  panel.className = 'source-panel' + (source.collapsed ? ' collapsed' : '');
+  panel.id = 'panel-' + source.id;
+
+  const title = source.hasCommentary
+    ? `${source.ref} · ${source.agentName}`
+    : `${source.ref} · Bible only`;
+
+  const bodyHTML = source.hasCommentary
+    ? buildVerseHTML(source.bible, source.commentary, source.agentName)
+    : buildVerseHTML(source.bible, {en:[], he:[]}, source.agentName);
+
+  const noCommentaryNote = !source.hasCommentary
+    ? `<div style="font-style:italic;color:var(--text2);font-size:12px;padding:4px 0 8px;">
+        No ${esc(source.agentName)} commentary on Sefaria for this passage.
+       </div>`
+    : '';
+
+  panel.innerHTML = `
+    <div class="source-panel-head" onclick="togglePanel('${source.id}')">
+      <span class="source-panel-title">${esc(title)}</span>
+      <div class="source-panel-controls">
+        <span class="source-panel-toggle">${source.collapsed ? '▶' : '▼'}</span>
+        <button class="source-panel-close" onclick="event.stopPropagation();removePanel('${source.id}')" title="Close">×</button>
+      </div>
+    </div>
+    <div class="source-panel-body">${noCommentaryNote}${bodyHTML}</div>
+  `;
+  return panel;
+}
+
+function rerenderSources() {
+  const stack = document.getElementById('sources-stack');
+  stack.innerHTML = '';
+  if (loadedSources.length === 0) {
+    document.getElementById('placeholder').style.display = 'flex';
+  } else {
+    document.getElementById('placeholder').style.display = 'none';
+    loadedSources.forEach(src => stack.appendChild(renderSourcePanel(src)));
+    applyMode();
+  }
+}
+
+function togglePanel(id) {
+  const src = loadedSources.find(s => s.id === id);
+  if (!src) return;
+  src.collapsed = !src.collapsed;
+  const panel = document.getElementById('panel-' + id);
+  if (panel) {
+    panel.classList.toggle('collapsed', src.collapsed);
+    panel.querySelector('.source-panel-toggle').textContent = src.collapsed ? '▶' : '▼';
+  }
+}
+
+function removePanel(id) {
+  loadedSources = loadedSources.filter(s => s.id !== id);
+  rerenderSources();
+}
+
+function addSourcePanel(ref, agentId, agentName, bible, commentary) {
+  // Collapse all existing panels
+  loadedSources.forEach(s => { s.collapsed = true; });
+
+  const hasCommentary = !!(
+    (commentary.en && commentary.en.some(Boolean)) ||
+    (commentary.he && commentary.he.some(Boolean))
+  );
+
+  // Check for duplicate — same ref + same agent; if exists, just expand it
+  const existing = loadedSources.find(s => s.ref === ref && s.agentId === agentId);
+  if (existing) {
+    existing.collapsed = false;
+    existing.bible = bible;
+    existing.commentary = commentary;
+    existing.hasCommentary = hasCommentary;
+    rerenderSources();
+    return hasCommentary;
+  }
+
+  const id = `${agentId}-${ref.replace(/\s/g,'-')}`;
+  loadedSources.push({ id, ref, agentId, agentName, bible, commentary, hasCommentary, collapsed: false });
+  rerenderSources();
+  return hasCommentary;
+}
+
 // ── Sefaria (via backend) ─────────────────────────────────────────────────────
 async function loadRef() {
   const raw = document.getElementById('ref-input').value.trim();
   if (!raw) return;
   await loadPassage(raw);
 }
-async function loadQuick(ref) {
-  document.getElementById('ref-input').value = ref;
-  await loadPassage(ref);
-}
 
-async function loadPassage(ref, silent = false) {
-  document.getElementById('placeholder').style.display = 'none';
+async function loadPassage(ref, suppressAgentCall = false) {
+  if (_loadingPassage) return; // loading lock
+  _loadingPassage = true;
+
   document.getElementById('sefaria-loading').style.display = 'flex';
-  document.getElementById('verses-container').style.display = 'none';
   hideError();
 
   try {
@@ -380,70 +526,57 @@ async function loadPassage(ref, silent = false) {
     const data = await resp.json();
 
     document.getElementById('sefaria-loading').style.display = 'none';
-    const container = document.getElementById('verses-container');
-    container.innerHTML = '';
-    container.style.display = 'block';
-    currentRef = data.ref;
-    document.getElementById('ref-label').textContent = data.ref;
-    document.getElementById('ctx-label').textContent = 'passage: ' + data.ref;
 
-    const bible           = data.bible;
-    const comm            = data.commentary;
-    const len             = Math.max(comm.en.length, comm.he.length);
     const activeAgentName = (_loadedAgents[AGENT_ID] || {}).name || AGENT_ID;
+    const hasCommentary = addSourcePanel(
+      data.ref, AGENT_ID, activeAgentName,
+      data.bible, data.commentary
+    );
 
-    if (len === 0) {
-      container.innerHTML = `<div style="font-style:italic;color:var(--text2);font-size:13px;padding:8px 0;">
-        No ${esc(activeAgentName)} commentary found for <strong>${esc(data.ref)}</strong> on Sefaria.
-        You can still ask — ${esc(activeAgentName)} will reason from principles and flag extrapolation.
-      </div>`;
-    } else {
-      for (let i = 0; i < len; i++) {
-        const b = document.createElement('div');
-        b.className = 'verse-block';
-        let html = `<div class="vref">Verse ${i+1}</div>`;
-        if (bible.he[i]) html += `<div class="he-text">${esc(bible.he[i])}</div>`;
-        if (bible.en[i]) html += `<div class="verse-en">${esc(bible.en[i])}</div>`;
-        if (comm.he[i])  html += `<div class="sub-lbl sub-lbl-he" style="margin-top:10px">${esc(activeAgentName)} (Hebrew)</div><div class="he-text">${esc(comm.he[i])}</div>`;
-        if (comm.en[i]) {
-          const titleNote = comm.he_version_title ? ` · ${comm.he_version_title}` : '';
-          html += `<div class="sub-lbl sub-lbl-en">${esc(activeAgentName)} (translation${titleNote})</div><div class="rashbam-en">${esc(comm.en[i])}</div>`;
-        }
-        b.innerHTML = html;
-        container.appendChild(b);
-      }
-    }
+    // Scroll new panel into view
+    const panelId = `${AGENT_ID}-${data.ref.replace(/\s/g,'-')}`;
+    const panelEl = document.getElementById('panel-' + panelId);
+    if (panelEl) panelEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
+    // Update ctx-bar
     const ctxBar = document.getElementById('ctx-bar');
     ctxBar.style.display = 'block';
     ctxBar.textContent = `Loaded: ${data.ref}`;
-    applyMode();
 
-    // Ask the active agent to acknowledge the passage — only on user-initiated loads
-    if (!silent) {
-      await callAgent(`The passage ${data.ref} has just been loaded. As ${activeAgentName}, briefly acknowledge it and note one or two things of interest from your commentary perspective, with precise verse references.`, true);
+    // Agent gives an initial reading — only on user-initiated loads with commentary
+    if (!suppressAgentCall && hasCommentary) {
+      await callAgent(
+        `I have just loaded ${data.ref}. As ${activeAgentName}, give your initial reading of this passage — what does the peshat show here, and what is most worth noting?`
+      );
     }
 
   } catch(e) {
     document.getElementById('sefaria-loading').style.display = 'none';
-    document.getElementById('placeholder').style.display = 'flex';
+    if (loadedSources.length === 0) {
+      document.getElementById('placeholder').style.display = 'flex';
+    }
     showError('Could not load passage: ' + e.message);
+  } finally {
+    _loadingPassage = false;
   }
 }
 
 // ── Chat (via backend) ────────────────────────────────────────────────────────
-async function callAgent(message, silent = false) {
-  if (!silent) addMsg('user', message);
+async function callAgent(message) {
+  addMsg('user', message);
   const typingId = addTyping();
   document.getElementById('send-btn').disabled = true;
   hideError();
 
   // If a clarification is pending, combine original question + user's answer
   let sendMessage = message;
-  if (pendingClarification && !silent) {
+  if (pendingClarification) {
     sendMessage = `${pendingClarification.originalMessage}\n\nClarification from student: ${message}`;
     pendingClarification = null;
   }
+
+  // Tell backend which refs are currently loaded so it has context
+  const loadedRefs = loadedSources.map(s => s.ref);
 
   try {
     const resp = await fetch(`${API}/api/chat`, {
@@ -451,10 +584,9 @@ async function callAgent(message, silent = false) {
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({
-        agent_id: AGENT_ID,
-        message: sendMessage,
-        loaded_ref: currentRef || null,
-        silent: silent,
+        agent_id:   AGENT_ID,
+        message:    sendMessage,
+        loaded_ref: loadedRefs.length > 0 ? loadedRefs[loadedRefs.length - 1] : null,
       })
     });
     if (!resp.ok) {
@@ -472,60 +604,46 @@ async function callAgent(message, silent = false) {
       return;
     }
 
-    // If the agent made tool calls, update text pane and show attribution.
-    if (data.tool_calls && data.tool_calls.length > 0) {
-      const activeAgentName = (_loadedAgents[AGENT_ID] || {}).name || AGENT_ID;
-      const found     = data.tool_calls.filter(tc => tc.status === 'found');
-
-      // If agent fetched its own commentary on a new passage, update text pane
-      const ownFetch = found.find(
-        tc => tc.source === AGENT_ID && !currentRef
-      );
-      if (ownFetch) {
-        document.getElementById('ref-input').value = ownFetch.ref;
-        loadPassage(ownFetch.ref, true); // suppressAck
-      }
-
-      // Show each fetched source with proper label — "[AgentName] consulted: Rashi on X, Bible Y"
-      if (found.length > 0) {
-        const sourceLabels = {
-          'bible':           'Bible',
-          'rashbam':         'Rashbam',
-          'rashi':           'Rashi',
-          'bereishit_rabbah':'Bereishit Rabbah',
-          'shemot_rabbah':   'Shemot Rabbah',
-          'vayikra_rabbah':  'Vayikra Rabbah',
-          'bamidbar_rabbah': 'Bamidbar Rabbah',
-          'devarim_rabbah':  'Devarim Rabbah',
-        };
-        // Also populate from _loadedAgents in case new agents are added
-        Object.values(_loadedAgents).forEach(a => { sourceLabels[a.id] = a.name; });
-
-        const items = found.map(tc => {
-          const src = sourceLabels[tc.source] || tc.source;
-          return `${src}: ${tc.ref}`;
-        }).join(' · ');
-        const bar = document.getElementById('ctx-bar');
-        bar.style.display = 'block';
-        bar.textContent = `${activeAgentName} consulted Sefaria — ${items}`;
-      }
-    }
-
-    // Auto-load primary verse into text pane if nothing is currently loaded.
-    if (!currentRef && data.retrieved_refs && data.retrieved_refs.length > 0) {
-      const primaryRef = data.retrieved_refs[0];
-      document.getElementById('ref-input').value = primaryRef;
-      loadPassage(primaryRef); // fire and forget — text pane update only
-    }
-
     removeTyping(typingId);
 
-    // If the conversation was summarized to make room, show a notice
+    // Show summarization notice if conversation was compressed
     if (data.summarized) {
       addSystemMsg('Earlier conversation summarized to continue the session.');
     }
 
     addMsg('agent', data.response, AGENT_ID);
+
+    // Handle agent tool calls — add source panels for fetches mentioned in response
+    if (data.tool_calls && data.tool_calls.length > 0) {
+      const activeAgentName = (_loadedAgents[AGENT_ID] || {}).name || AGENT_ID;
+      const found = data.tool_calls.filter(tc => tc.status === 'found');
+      const response = data.response || '';
+
+      const sourceLabels = {
+        'bible': 'Bible', 'rashbam': 'Rashbam', 'rashi': 'Rashi',
+        'bereishit_rabbah': 'Bereishit Rabbah', 'shemot_rabbah': 'Shemot Rabbah',
+        'vayikra_rabbah': 'Vayikra Rabbah', 'bamidbar_rabbah': 'Bamidbar Rabbah',
+        'devarim_rabbah': 'Devarim Rabbah',
+      };
+      Object.values(_loadedAgents).forEach(a => { sourceLabels[a.id] = a.name; });
+
+      // Only add a panel if the agent actually mentions the ref in its response
+      for (const tc of found) {
+        const refMentioned = response.includes(tc.ref) ||
+          response.toLowerCase().includes(tc.ref.toLowerCase());
+        if (refMentioned) {
+          // We don't have the full bible/commentary data from tool calls — 
+          // fetch the panel data properly
+          const srcName = sourceLabels[tc.source] || tc.source;
+          // Add a thin panel with what we know — ref and source name
+          // Full data would require a separate fetch; for now show a label
+          const bar = document.getElementById('ctx-bar');
+          bar.style.display = 'block';
+          bar.textContent = `${activeAgentName} consulted: ${srcName} on ${tc.ref}`;
+        }
+      }
+    }
+
   } catch(e) {
     removeTyping(typingId);
     showError('Could not reach server: ' + e.message);
@@ -538,7 +656,7 @@ async function doSend() {
   const text = input.value.trim();
   if (!text) return;
   input.value = ''; input.style.height = '';
-  await callAgent(text, false);
+  await callAgent(text);
 }
 
 function sendMsg(text) {
