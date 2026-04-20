@@ -337,6 +337,9 @@ body {
       </div>
       <div id="ctx-bar"></div>
       <div id="error-bar"></div>
+      <div id="clarification-bar" style="display:none;padding:5px 14px;font-size:11px;font-family:sans-serif;font-style:italic;color:var(--text2);background:var(--bg2);border-top:0.5px solid var(--border);">
+        ↩ Awaiting your clarification — reply to continue
+      </div>
       <div id="input-area">
         <textarea id="chat-input" rows="1"
           placeholder="Ask a question about the text… (Enter to send)"
@@ -573,6 +576,8 @@ async function callAgent(message) {
   if (pendingClarification) {
     sendMessage = `${pendingClarification.originalMessage}\n\nClarification from student: ${message}`;
     pendingClarification = null;
+    document.getElementById('clarification-bar').style.display = 'none';
+    document.getElementById('chat-input').placeholder = 'Ask a question about the text… (Enter to send)';
   }
 
   // Tell backend which refs are currently loaded so it has context
@@ -600,6 +605,8 @@ async function callAgent(message) {
       removeTyping(typingId);
       pendingClarification = { originalMessage: sendMessage };
       addMsg('agent', data.clarification_needed, AGENT_ID);
+      document.getElementById('clarification-bar').style.display = 'block';
+      document.getElementById('chat-input').placeholder = 'Your clarification… (Enter to send)';
       document.getElementById('send-btn').disabled = false;
       return;
     }
@@ -627,23 +634,24 @@ async function callAgent(message) {
       for (const tc of data.tool_calls) {
         if (tc.status !== 'found') continue;
 
-        // Determine display name for this source
         const srcName = sourceLabels[tc.source] || tc.source;
+        const isBible = tc.source === 'bible';
 
-        // Build bible/commentary data from tool result text
-        // Tool results give us flat text — wrap for panel rendering
-        const isBible       = tc.source === 'bible';
-        const isCommentator = !isBible && tc.source in sourceLabels;
+        // Use structured verse arrays if available, fall back to flat strings
+        const bible = isBible ? {
+          he: tc.he_verses || (tc.text_he ? [tc.text_he] : []),
+          en: tc.en_verses || (tc.text_en ? [tc.text_en] : []),
+        } : {
+          he: tc.bible_he || [],
+          en: tc.bible_en || [],
+        };
 
-        const bible = isBible
-          ? { he: [tc.text_he || ''], en: [tc.text_en || ''] }
-          : { he: [], en: [] };
-        const commentary = !isBible
-          ? { he: [tc.text_he || ''], en: [tc.text_en || ''] }
-          : { he: [], en: [] };
+        const commentary = !isBible ? {
+          he: tc.he_verses || (tc.text_he ? [tc.text_he] : []),
+          en: tc.en_verses || (tc.text_en ? [tc.text_en] : []),
+          he_version_title: tc.translation_label || '',
+        } : { he: [], en: [] };
 
-        // Use the fetching agent's name as the commentator label
-        // (Rashbam fetched Rashi → label as Rashi; Rashbam fetched Bible → label as Bible)
         const panelAgentId   = isBible ? 'bible' : tc.source;
         const panelAgentName = srcName;
 
@@ -814,6 +822,8 @@ function switchAgent(agentId) {
   if (agentId === AGENT_ID) return;
   AGENT_ID = agentId;
   pendingClarification = null;
+  document.getElementById('clarification-bar').style.display = 'none';
+  document.getElementById('chat-input').placeholder = 'Ask a question about the text… (Enter to send)';
   // Check the corresponding radio button
   const radio = document.getElementById('radio-' + agentId);
   if (radio) radio.checked = true;

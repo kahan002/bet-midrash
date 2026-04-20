@@ -331,6 +331,8 @@ async def execute_fetch_tool(
                 "source": source,
                 "text_he": he,
                 "text_en": en,
+                "he_verses": data["he"],
+                "en_verses": data["en"],
                 "translation_label": data.get("en_version_title", ""),
             }
 
@@ -361,6 +363,10 @@ async def execute_fetch_tool(
                 "source": source,
                 "text_he": " ".join(t for t in result["commentary"]["he"] if t),
                 "text_en": " ".join(t for t in result["commentary"]["en"] if t),
+                "he_verses": result["commentary"]["he"],
+                "en_verses": result["commentary"]["en"],
+                "bible_he":  result["bible"]["he"],
+                "bible_en":  result["bible"]["en"],
                 "translation_label": result["commentary"]["en_translation_label"],
                 "show_translation_caveat": config.show_translation_caveat,
                 "context_string": result["context_string"],

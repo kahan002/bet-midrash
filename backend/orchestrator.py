@@ -193,18 +193,13 @@ async def ask(
     agent_id: str,
     user_message: str,
     loaded_ref: Optional[str] = None,
-    silent: bool = False,
 ) -> dict:
     """
     Send a question to a single commentator agent.
 
-    silent=True skips Turn 1 ref extraction — used for passage acknowledgments,
-    agent introductions, and other system-generated messages that don't need
-    verse identification. The agent answers directly from existing context.
-
-    Step 1: Extract verse refs + Rashi refs (one LLM call) — skipped if silent
-    Step 2: Fetch passages + Rashi in parallel from Sefaria — skipped if silent
-    Step 3: Build agent response with all verified text injected
+    Step 1: Extract verse refs + Rashi refs (one LLM call)
+    Step 2: Fetch passages + Rashi in parallel from Sefaria
+    Step 3: Build agent response with all verified text injected + tool access
     """
     agent = get_agent(agent_id)
 
@@ -224,38 +219,6 @@ async def ask(
         current_agent_id=agent_id,
         agent_names=all_agents,
     )
-
-    # ── Silent path: skip extraction and fetching, answer directly ────────────
-    if silent:
-        system, messages = agent.build_messages(
-            user_message=user_message,
-            conversation_history=history,
-            sefaria_context=None,
-            auto_fetched_verse=None,
-        )
-        fetch_tool = build_fetch_tool_schema()
-        all_configs = {c.id: c for c in get_all_configs()}
-        async def tool_executor_silent(tool_name, tool_input):
-            return await sefaria_svc.execute_fetch_tool(
-                tool_input.get("ref", ""), tool_input.get("source", ""),
-                all_configs, MIDRASH_SOURCES,
-            )
-        response, tool_calls = await llm_client.complete_with_tools(
-            system=system, messages=messages,
-            tools=[fetch_tool], tool_executor=tool_executor_silent,
-        )
-        conv_store.append_user(session_id, user_message)
-        conv_store.append_agent(session_id, agent_id, response)
-        return {
-            "agent_id": agent_id,
-            "response": response,
-            "clarification_needed": None,
-            "retrieved_refs": [],
-            "retrieved_rashi": [],
-            "retrieved_words": [],
-            "tool_calls": tool_calls,
-            "summarized": summarized,
-        }
 
     # ── Step 1: identify verses and Rashi refs ────────────────────────────────
     detected_ref = sefaria_svc.parse_ref(user_message)

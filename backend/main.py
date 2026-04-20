@@ -100,7 +100,6 @@ class ChatRequest(BaseModel):
     agent_id: str
     message: str
     loaded_ref: Optional[str] = None
-    silent: bool = False  # True for passage acks and agent intros — skips Turn 1
 
 
 @app.post("/api/chat")
@@ -117,7 +116,6 @@ async def chat(
             agent_id=req.agent_id,
             user_message=req.message,
             loaded_ref=req.loaded_ref,
-            silent=req.silent,
         )
         return result
     except KeyError as e:
