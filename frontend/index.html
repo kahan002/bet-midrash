@@ -613,12 +613,9 @@ async function callAgent(message) {
 
     addMsg('agent', data.response, AGENT_ID);
 
-    // Handle agent tool calls — add source panels for fetches mentioned in response
+    // Handle agent tool calls — add source panels for all fetched sources
     if (data.tool_calls && data.tool_calls.length > 0) {
       const activeAgentName = (_loadedAgents[AGENT_ID] || {}).name || AGENT_ID;
-      const found = data.tool_calls.filter(tc => tc.status === 'found');
-      const response = data.response || '';
-
       const sourceLabels = {
         'bible': 'Bible', 'rashbam': 'Rashbam', 'rashi': 'Rashi',
         'bereishit_rabbah': 'Bereishit Rabbah', 'shemot_rabbah': 'Shemot Rabbah',
@@ -627,20 +624,41 @@ async function callAgent(message) {
       };
       Object.values(_loadedAgents).forEach(a => { sourceLabels[a.id] = a.name; });
 
-      // Only add a panel if the agent actually mentions the ref in its response
-      for (const tc of found) {
-        const refMentioned = response.includes(tc.ref) ||
-          response.toLowerCase().includes(tc.ref.toLowerCase());
-        if (refMentioned) {
-          // We don't have the full bible/commentary data from tool calls — 
-          // fetch the panel data properly
-          const srcName = sourceLabels[tc.source] || tc.source;
-          // Add a thin panel with what we know — ref and source name
-          // Full data would require a separate fetch; for now show a label
-          const bar = document.getElementById('ctx-bar');
-          bar.style.display = 'block';
-          bar.textContent = `${activeAgentName} consulted: ${srcName} on ${tc.ref}`;
-        }
+      for (const tc of data.tool_calls) {
+        if (tc.status !== 'found') continue;
+
+        // Determine display name for this source
+        const srcName = sourceLabels[tc.source] || tc.source;
+
+        // Build bible/commentary data from tool result text
+        // Tool results give us flat text — wrap for panel rendering
+        const isBible       = tc.source === 'bible';
+        const isCommentator = !isBible && tc.source in sourceLabels;
+
+        const bible = isBible
+          ? { he: [tc.text_he || ''], en: [tc.text_en || ''] }
+          : { he: [], en: [] };
+        const commentary = !isBible
+          ? { he: [tc.text_he || ''], en: [tc.text_en || ''] }
+          : { he: [], en: [] };
+
+        // Use the fetching agent's name as the commentator label
+        // (Rashbam fetched Rashi → label as Rashi; Rashbam fetched Bible → label as Bible)
+        const panelAgentId   = isBible ? 'bible' : tc.source;
+        const panelAgentName = srcName;
+
+        addSourcePanel(tc.ref, panelAgentId, panelAgentName, bible, commentary);
+      }
+
+      // Update ctx-bar with summary of what was consulted
+      const found = data.tool_calls.filter(tc => tc.status === 'found');
+      if (found.length > 0) {
+        const items = found.map(tc =>
+          `${sourceLabels[tc.source] || tc.source}: ${tc.ref}`
+        ).join(' · ');
+        const bar = document.getElementById('ctx-bar');
+        bar.style.display = 'block';
+        bar.textContent = `${activeAgentName} consulted — ${items}`;
       }
     }
 

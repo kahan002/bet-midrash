@@ -139,11 +139,14 @@ async def complete_with_tools(
                 # Execute the tool
                 result = await tool_executor(block.name, tool_input)
 
-                # Track for frontend use
+                # Track for frontend use — include full result so frontend can render panels
                 tool_calls_made.append({
-                    "ref":    tool_input.get("ref", ""),
-                    "source": tool_input.get("source", ""),
-                    "status": result.get("status", "unknown"),
+                    "ref":        tool_input.get("ref", ""),
+                    "source":     tool_input.get("source", ""),
+                    "status":     result.get("status", "unknown"),
+                    "text_he":    result.get("text_he", ""),
+                    "text_en":    result.get("text_en", ""),
+                    "context_string": result.get("context_string", ""),
                 })
 
                 # Format result for the API
