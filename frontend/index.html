@@ -390,7 +390,7 @@ function applyMode() {
 }
 
 // ── Source panel rendering ────────────────────────────────────────────────────
-function buildVerseHTML(bible, comm, agentName) {
+function buildVerseHTML(bible, comm, agentName, ref) {
   const len = Math.max(
     (comm.en || []).length,
     (comm.he || []).length,
@@ -398,10 +398,17 @@ function buildVerseHTML(bible, comm, agentName) {
     (bible.he || []).length,
   );
   if (len === 0) return '';
+
+  // Derive start verse number from ref (e.g. "Genesis 25:8-9" → 8, "Exodus 3:11" → 11)
+  let startVerse = 1;
+  const verseMatch = (ref || '').match(/:(\d+)/);
+  if (verseMatch) startVerse = parseInt(verseMatch[1], 10);
+
   let html = '';
   for (let i = 0; i < len; i++) {
+    const verseNum = startVerse + i;
     html += `<div class="verse-block">`;
-    html += `<div class="vref">Verse ${i+1}</div>`;
+    html += `<div class="vref">Verse ${verseNum}</div>`;
     if (bible.he && bible.he[i]) html += `<div class="he-text">${esc(bible.he[i])}</div>`;
     if (bible.en && bible.en[i]) html += `<div class="verse-en">${esc(bible.en[i])}</div>`;
     if (comm.he && comm.he[i]) {
@@ -428,8 +435,8 @@ function renderSourcePanel(source) {
     : `${source.ref} · Bible only`;
 
   const bodyHTML = source.hasCommentary
-    ? buildVerseHTML(source.bible, source.commentary, source.agentName)
-    : buildVerseHTML(source.bible, {en:[], he:[]}, source.agentName);
+    ? buildVerseHTML(source.bible, source.commentary, source.agentName, source.ref)
+    : buildVerseHTML(source.bible, {en:[], he:[]}, source.agentName, source.ref);
 
   const noCommentaryNote = !source.hasCommentary
     ? `<div style="font-style:italic;color:var(--text2);font-size:12px;padding:4px 0 8px;">
@@ -478,6 +485,23 @@ function removePanel(id) {
   rerenderSources();
 }
 
+// Check if refA is contained within refB (same book, verse within range)
+// e.g. "Genesis 25:9" is within "Genesis 25:8-9"
+function refContainedIn(refA, refB) {
+  // Normalise: "Genesis 25:9" and "Genesis 25:8-9"
+  const bookVerseA = refA.match(/^(.+?)\s+(\d+):(\d+)(?:-(\d+))?$/);
+  const bookVerseB = refB.match(/^(.+?)\s+(\d+):(\d+)(?:-(\d+))?$/);
+  if (!bookVerseA || !bookVerseB) return false;
+  const [, bookA, chapA, startA] = bookVerseA;
+  const [, bookB, chapB, startB, endB] = bookVerseB;
+  if (bookA.toLowerCase() !== bookB.toLowerCase()) return false;
+  if (chapA !== chapB) return false;
+  const vA = parseInt(startA, 10);
+  const vStart = parseInt(startB, 10);
+  const vEnd = endB ? parseInt(endB, 10) : vStart;
+  return vA >= vStart && vA <= vEnd;
+}
+
 function addSourcePanel(ref, agentId, agentName, bible, commentary) {
   // Collapse all existing panels
   loadedSources.forEach(s => { s.collapsed = true; });
@@ -487,13 +511,24 @@ function addSourcePanel(ref, agentId, agentName, bible, commentary) {
     (commentary.he && commentary.he.some(Boolean))
   );
 
-  // Check for duplicate — same ref + same agent; if exists, just expand it
+  // Check for exact duplicate — same ref + same agent
   const existing = loadedSources.find(s => s.ref === ref && s.agentId === agentId);
   if (existing) {
     existing.collapsed = false;
     existing.bible = bible;
     existing.commentary = commentary;
     existing.hasCommentary = hasCommentary;
+    rerenderSources();
+    return hasCommentary;
+  }
+
+  // Check if this ref is a sub-range of an already-loaded panel for the same agent
+  // e.g. don't add "Genesis 25:9" if "Genesis 25:8-9" is already loaded for this agent
+  const containedIn = loadedSources.find(
+    s => s.agentId === agentId && refContainedIn(ref, s.ref)
+  );
+  if (containedIn) {
+    containedIn.collapsed = false;
     rerenderSources();
     return hasCommentary;
   }
@@ -807,7 +842,20 @@ function fmt(text) {
   return text.split(/\n+/).filter(p=>p.trim()).map(p=>`<p>${esc(p)}</p>`).join('');
 }
 function esc(s) {
-  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // First decode known safe HTML entities that Sefaria text may contain,
+  // then re-escape for safe HTML insertion. This prevents &nbsp; from
+  // appearing literally as text.
+  const decoded = (s || '')
+    .replace(/&nbsp;/g, '\u00a0')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+  return decoded
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 function showError(msg) {
   const el = document.getElementById('error-bar');
