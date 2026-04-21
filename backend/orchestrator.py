@@ -377,12 +377,27 @@ async def ask(
             )
         if counterfactual:
             names = [all_agents.get(a, a) for a in counterfactual]
+            # Build relationship notes per agent
+            relationship_notes = []
+            for aid in counterfactual:
+                aname = all_agents.get(aid, aid)
+                # Encode known family relationships
+                if agent_id == "rashi" and aid == "rashbam":
+                    relationship_notes.append(
+                        f"Rashbam (Shmuel ben Meir) is YOUR OWN GRANDSON — "
+                        f"the son of your daughter Yocheved. He is not the student's grandson. "
+                        f"Refer to him as 'my grandson Shmuel' or 'Rashbam, my grandson.'"
+                    )
+                else:
+                    relationship_notes.append(
+                        f"You could not have read {aname} — "
+                        f"their commentary postdates you."
+                    )
             notes.append(
-                f"You could not have read {', '.join(names)} — "
-                f"their commentary postdates you. When responding to their "
-                f"comments in this conversation, acknowledge explicitly that "
-                f"you are reasoning about what you would have said, not "
-                f"claiming you actually read their work."
+                "\n".join(relationship_notes) +
+                "\nWhen responding to their comments in this conversation, acknowledge "
+                "explicitly that you are reasoning about what you would have said, "
+                "not claiming you actually read their work."
             )
         if notes:
             system += (

@@ -157,15 +157,8 @@ async def complete_with_tools(
                 })
 
                 if call_count >= MAX_TOOL_CALLS:
-                    # Add a note so the model knows it's hit the limit
-                    tool_results.append({
-                        "type":    "tool_result",
-                        "tool_use_id": block.id + "_limit",
-                        "content": json.dumps({
-                            "status":  "error",
-                            "message": "Tool call limit reached. Please proceed with available information.",
-                        }),
-                    })
+                    # Don't add a fake tool_result — that would cause an API error.
+                    # Instead inject a note into the system prompt for the final call.
                     break
 
             # Add tool results to working messages and loop
@@ -175,12 +168,13 @@ async def complete_with_tools(
             })
 
             if call_count >= MAX_TOOL_CALLS:
-                # Force a final response with no more tools
+                # Force a final response with no more tools.
+                # Add a note to system so model knows to proceed with what it has.
                 final = client.messages.create(
                     model=_model(),
                     max_tokens=max_tokens,
                     temperature=_temperature(),
-                    system=system,
+                    system=system + "\n\n[Tool call limit reached. Proceed with the information retrieved so far.]",
                     messages=working_messages,
                     # No tools — forces end_turn
                 )
