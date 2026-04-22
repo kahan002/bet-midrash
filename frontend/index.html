@@ -399,16 +399,35 @@ function buildVerseHTML(bible, comm, agentName, ref) {
   );
   if (len === 0) return '';
 
-  // Derive start verse number from ref (e.g. "Genesis 25:8-9" → 8, "Exodus 3:11" → 11)
-  let startVerse = 1;
-  const verseMatch = (ref || '').match(/:(\d+)/);
-  if (verseMatch) startVerse = parseInt(verseMatch[1], 10);
+  // Parse verse range from ref: "Genesis 25:8-9" → start=8, end=9
+  // "Exodus 3:11" → start=11, end=11
+  let startVerse = 1, endVerse = null;
+  const rangeMatch = (ref || '').match(/:(\d+)(?:-(\d+))?/);
+  if (rangeMatch) {
+    startVerse = parseInt(rangeMatch[1], 10);
+    endVerse   = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : startVerse;
+  }
+  const totalVerses = endVerse ? (endVerse - startVerse + 1) : 1;
+
+  // Build verse labels. If Sefaria returned fewer blocks than verses in the range,
+  // some verses were merged. Distribute the range evenly across returned blocks.
+  function verseLabel(i) {
+    if (totalVerses <= 1 || len >= totalVerses) {
+      // One-to-one mapping or single verse
+      return `Verse ${startVerse + i}`;
+    }
+    // Merged: figure out which source verses this block covers
+    const versesPerBlock = totalVerses / len;
+    const blockStart = Math.round(startVerse + i * versesPerBlock);
+    const blockEnd   = Math.round(startVerse + (i + 1) * versesPerBlock) - 1;
+    if (blockStart === blockEnd) return `Verse ${blockStart}`;
+    return `Verses ${blockStart}–${blockEnd}`;
+  }
 
   let html = '';
   for (let i = 0; i < len; i++) {
-    const verseNum = startVerse + i;
     html += `<div class="verse-block">`;
-    html += `<div class="vref">Verse ${verseNum}</div>`;
+    html += `<div class="vref">${verseLabel(i)}</div>`;
     if (bible.he && bible.he[i]) html += `<div class="he-text">${esc(bible.he[i])}</div>`;
     if (bible.en && bible.en[i]) html += `<div class="verse-en">${esc(bible.en[i])}</div>`;
     if (comm.he && comm.he[i]) {
