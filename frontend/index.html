@@ -144,7 +144,7 @@ body {
   color: var(--text2); font-size: 13px; text-align: center;
   padding: 30px; font-style: italic;
 }
-.he-big { font-family: 'Noto Serif Hebrew', serif; font-size: 36px; color: var(--border2); margin-bottom: 8px; direction: rtl; }
+.he-big { font-family: 'Noto Serif Hebrew', serif; font-size: 36px; color: var(--text2); opacity: 0.5; margin-bottom: 8px; direction: rtl; }
 #sefaria-loading {
   display: none; flex-direction: column; align-items: center;
   justify-content: center; padding: 20px; gap: 10px;
@@ -332,7 +332,7 @@ body {
         <div class="msg">
           <div class="avatar agent" style="background:#4a5568;font-size:11px;font-family:sans-serif;">בית</div>
           <div class="msg-body">
-            <div class="msg-name" style="color:var(--text2)">Bet Midrash</div>
+            <div class="msg-name">Bet Midrash</div>
             <div class="msg-text">
               <p>Welcome. This is a Torah study session with the medieval commentators.</p>
               <p>Select a commentator above and ask a question, or load a passage on the left. You can ask multiple commentators about the same text — their responses appear together in the conversation.</p>
@@ -609,7 +609,8 @@ async function loadPassage(ref, suppressAgentCall = false) {
     // Agent gives an initial reading — only on user-initiated loads with commentary
     if (!suppressAgentCall && hasCommentary) {
       await callAgent(
-        `I have just loaded ${data.ref}. As ${activeAgentName}, give your initial reading of this passage — what does the peshat show here, and what is most worth noting?`
+        `I have just loaded ${data.ref}. As ${activeAgentName}, give your initial reading of this passage — what does the peshat show here, and what is most worth noting?`,
+        'moderator'
       );
     }
 
@@ -625,8 +626,8 @@ async function loadPassage(ref, suppressAgentCall = false) {
 }
 
 // ── Chat (via backend) ────────────────────────────────────────────────────────
-async function callAgent(message) {
-  addMsg('user', message);
+async function callAgent(message, role = 'user') {
+  addMsg(role, message);
   const typingId = addTyping();
   document.getElementById('send-btn').disabled = true;
   hideError();
@@ -760,26 +761,40 @@ function autoResize(el) {
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
 function addMsg(role, text, agentId) {
-  // agentId is the specific agent ('rashi', 'rashbam') — used for labeling/color.
-  // Falls back to current AGENT_ID if not provided.
-  const aid   = agentId || (role === 'agent' ? AGENT_ID : null);
-  const agent = aid ? (_loadedAgents[aid] || null) : null;
-  const msgs  = document.getElementById('messages');
-  const div   = document.createElement('div');
-  div.className = 'msg' + (role === 'user' ? ' user' : '');
+  const msgs = document.getElementById('messages');
+  const div  = document.createElement('div');
 
   let avatar, name;
-  if (role === 'agent' && agent) {
-    const color  = agent.color || 'var(--agent-color)';
-    const glyph  = agent.hebrew_name || aid;
-    avatar = `<div class="avatar agent" style="background:${color}">${glyph}</div>`;
-    name   = agent.name;
-  } else if (role === 'agent') {
-    avatar = `<div class="avatar agent" style="background:var(--agent-color)">ר</div>`;
-    name   = 'Agent';
-  } else {
+
+  if (role === 'user') {
+    div.className = 'msg user';
     avatar = `<div class="avatar user">You</div>`;
     name   = 'You';
+
+  } else if (role === 'moderator') {
+    div.className = 'msg';
+    avatar = `<div class="avatar agent" style="background:#4a5568;font-size:11px;font-family:sans-serif;">בית</div>`;
+    name   = 'Bet Midrash';
+
+  } else if (role === 'agent') {
+    div.className = 'msg';
+    const aid   = agentId || AGENT_ID;
+    const agent = _loadedAgents[aid] || null;
+    if (agent) {
+      const color = agent.color || 'var(--agent-color)';
+      const glyph = agent.hebrew_name || aid;
+      avatar = `<div class="avatar agent" style="background:${color}">${glyph}</div>`;
+      name   = agent.name;
+    } else {
+      avatar = `<div class="avatar agent" style="background:var(--agent-color)">ר</div>`;
+      name   = aid || 'Agent';
+    }
+
+  } else {
+    // Unknown role — render as neutral system message, not as "You"
+    div.className = 'msg';
+    avatar = `<div class="avatar agent" style="background:#4a5568;font-size:10px;font-family:sans-serif;">•</div>`;
+    name   = role || 'System';
   }
 
   const copyBtn = `<button class="copy-btn" data-copy="">Copy</button>`;
