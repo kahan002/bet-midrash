@@ -19,7 +19,7 @@ import anthropic
 
 _client: Optional[anthropic.Anthropic] = None
 
-DEFAULT_MODEL       = "claude-sonnet-4-20250514"
+DEFAULT_MODEL       = "claude-sonnet-4-6"
 MAX_TOKENS          = 1200
 DEFAULT_TEMPERATURE = 0.3
 MAX_TOOL_CALLS      = 5  # per Andrew Ng: beyond 5 you're in a loop
