@@ -286,152 +286,119 @@ async def fetch_passage(
 async def execute_fetch_tool(
     ref: str,
     source: str,
-    agent_configs: dict,      # {agent_id: AgentConfig} — from registry
-    midrash_sources: dict,    # {source_id: {sefaria_name, display_name}} — from agents registry
+    all_sources: dict,   # SOURCES dict from agents/__init__.py
 ) -> dict:
     """
     Execute a fetch_sefaria tool call from the agent.
-    Returns a structured result the agent and the tool-call loop can interpret.
+    Uses the unified SOURCES registry — one lookup path for all source types.
 
     Return shapes:
-      {"status": "found", "ref": ..., "source": ..., "text": ...}
+      {"status": "found",     "ref": ..., "source": ..., text fields ...}
       {"status": "not_found", "ref": ..., "source": ..., "ref_valid": bool, "message": ...}
-      {"status": "error", "ref": ..., "source": ..., "message": ...}
+      {"status": "error",     "ref": ..., "source": ..., "message": ...}
     """
-    try:
-        normalized = normalize_ref(ref)
-    except Exception:
+    if source not in all_sources:
         return {
-            "status": "not_found",
+            "status": "error",
             "ref": ref,
             "source": source,
-            "ref_valid": False,
-            "message": f"Could not parse reference '{ref}'. Please check the format (e.g. 'Exodus 3:11').",
+            "message": f"Unknown source '{source}'.",
         }
 
-    try:
-        if source == "bible":
-            data = await fetch_text(
-                _to_sefaria_url(normalized),
-                en_preferences=_BIBLE_EN_PREF,
-            )
-            if not data["found"]:
-                return {
-                    "status": "not_found",
-                    "ref": normalized,
-                    "source": source,
+    src = all_sources[source]
+
+    # ── Bible ──────────────────────────────────────────────────────────────────
+    if source == "bible":
+        try:
+            normalized = normalize_ref(ref)
+        except Exception:
+            return {"status": "not_found", "ref": ref, "source": source,
                     "ref_valid": False,
-                    "message": f"Biblical reference '{normalized}' not found on Sefaria.",
-                }
-            en = " ".join(data["en_clean"])
-            he = " ".join(data["he_clean"])
+                    "message": f"Could not parse reference '{ref}'."}
+        try:
+            data = await fetch_text(_to_sefaria_url(normalized),
+                                    en_preferences=_BIBLE_EN_PREF)
+            if not data["found"]:
+                return {"status": "not_found", "ref": normalized, "source": source,
+                        "ref_valid": False,
+                        "message": f"Biblical reference '{normalized}' not found on Sefaria."}
             return {
-                "status": "found",
-                "ref": normalized,
-                "source": source,
-                "text_he": he,
-                "text_en": en,
-                "he_verses": data["he"],
-                "en_verses": data["en"],
+                "status": "found", "ref": normalized, "source": source,
+                "text_he": " ".join(data["he_clean"]),
+                "text_en": " ".join(data["en_clean"]),
+                "he_verses": data["he"], "en_verses": data["en"],
                 "translation_label": data.get("en_version_title", ""),
             }
+        except Exception as e:
+            return {"status": "error", "ref": ref, "source": source,
+                    "message": f"Sefaria fetch failed: {e}"}
 
-        elif source in agent_configs:
-            config = agent_configs[source]
-            result = await fetch_passage(
-                normalized,
-                config.sefaria_prefix,
-                en_translation_prefs=config.en_translation_prefs,
-            )
-            if not result["commentary"]["found"]:
-                # Distinguish: did the verse itself exist?
-                bible_found = bool(result["bible"]["en"] or result["bible"]["he"])
-                return {
-                    "status": "not_found",
-                    "ref": normalized,
-                    "source": source,
-                    "ref_valid": bible_found,
-                    "message": (
-                        f"No {config.name} commentary preserved on Sefaria for {normalized}."
-                        if bible_found else
-                        f"Reference '{normalized}' not found on Sefaria."
-                    ),
-                }
-            return {
-                "status": "found",
-                "ref": normalized,
-                "source": source,
-                "text_he": " ".join(t for t in result["commentary"]["he"] if t),
-                "text_en": " ".join(t for t in result["commentary"]["en"] if t),
-                "he_verses": result["commentary"]["he"],
-                "en_verses": result["commentary"]["en"],
-                "bible_he":  result["bible"]["he"],
-                "bible_en":  result["bible"]["en"],
-                "translation_label": result["commentary"]["en_translation_label"],
-                "show_translation_caveat": config.show_translation_caveat,
-                "context_string": result["context_string"],
-            }
-
-        elif source in midrash_sources:
-            midrash = midrash_sources[source]
-            # Midrash refs use their own numbering — pass the ref as-is,
-            # with the Sefaria name prepended.
-            # The agent should provide refs like "1:1" or "3:4" and we
-            # prepend the midrash name: "Bereishit Rabbah 1:1"
-            sefaria_name = midrash["sefaria_name"]
-            # If the agent already included the midrash name, use as-is;
-            # otherwise prepend it.
-            if ref.strip().lower().startswith(sefaria_name.lower()):
-                full_ref = ref.strip()
-            else:
-                full_ref = f"{sefaria_name} {ref.strip()}"
-            sefaria_ref = full_ref.replace(" ", "_").replace(":", ".")
+    # ── Midrash ────────────────────────────────────────────────────────────────
+    if src.get("is_midrash"):
+        sefaria_name = src["sefaria_name"]
+        full_ref = (ref.strip() if ref.strip().lower().startswith(sefaria_name.lower())
+                    else f"{sefaria_name} {ref.strip()}")
+        sefaria_ref = full_ref.replace(" ", "_").replace(":", ".")
+        try:
             data = await fetch_text(sefaria_ref)
             if not data["found"]:
-                return {
-                    "status": "not_found",
-                    "ref": full_ref,
-                    "source": source,
-                    "ref_valid": False,
-                    "message": (
-                        f"'{full_ref}' not found on Sefaria. "
-                        f"Check the section/paragraph numbering."
-                    ),
-                }
-            he = " ".join(data["he_clean"])
-            en = " ".join(data["en_clean"])
+                return {"status": "not_found", "ref": full_ref, "source": source,
+                        "ref_valid": False,
+                        "message": f"'{full_ref}' not found on Sefaria. Check section/paragraph numbering."}
             lines = []
             for i, h in enumerate(data["he"]):
                 e = data["en"][i] if i < len(data["en"]) else None
                 if h: lines.append(f"He: {h}")
                 if e: lines.append(f"En: {e}")
             return {
-                "status": "found",
-                "ref": full_ref,
-                "source": source,
-                "text_he": he,
-                "text_en": en,
-                "context_string": (
-                    f"{midrash['display_name']} {ref} (from Sefaria):\n"
-                    + "\n".join(lines)
+                "status": "found", "ref": full_ref, "source": source,
+                "text_he": " ".join(data["he_clean"]),
+                "text_en": " ".join(data["en_clean"]),
+                "context_string": f"{src['display_name']} {ref} (from Sefaria):\n" + "\n".join(lines),
+            }
+        except Exception as e:
+            return {"status": "error", "ref": ref, "source": source,
+                    "message": f"Sefaria fetch failed: {e}"}
+
+    # ── Commentator (agent or variant) ─────────────────────────────────────────
+    try:
+        normalized = normalize_ref(ref)
+    except Exception:
+        return {"status": "not_found", "ref": ref, "source": source,
+                "ref_valid": False,
+                "message": f"Could not parse reference '{ref}'."}
+    try:
+        result = await fetch_passage(
+            normalized,
+            src["sefaria_prefix"],
+            en_translation_prefs=src.get("en_translation_prefs", []),
+        )
+        if not result["commentary"]["found"]:
+            bible_found = bool(result["bible"]["en"] or result["bible"]["he"])
+            return {
+                "status": "not_found", "ref": normalized, "source": source,
+                "ref_valid": bible_found,
+                "message": (
+                    f"No {src['display_name']} commentary preserved on Sefaria for {normalized}."
+                    if bible_found else
+                    f"Reference '{normalized}' not found on Sefaria."
                 ),
             }
-
-        else:
-            return {
-                "status": "error",
-                "ref": normalized,
-                "source": source,
-                "message": f"Unknown source '{source}'.",
-            }
-
-    except Exception as e:
         return {
-            "status": "error",
-            "ref": normalized,
-            "source": source,
-            "message": f"Sefaria fetch failed: {e}",
+            "status": "found", "ref": normalized, "source": source,
+            "text_he":  " ".join(t for t in result["commentary"]["he"] if t),
+            "text_en":  " ".join(t for t in result["commentary"]["en"] if t),
+            "he_verses": result["commentary"]["he"],
+            "en_verses": result["commentary"]["en"],
+            "bible_he":  result["bible"]["he"],
+            "bible_en":  result["bible"]["en"],
+            "translation_label":      result["commentary"]["en_translation_label"],
+            "show_translation_caveat": src.get("show_caveat", False),
+            "context_string":         result["context_string"],
         }
+    except Exception as e:
+        return {"status": "error", "ref": normalized, "source": source,
+                "message": f"Sefaria fetch failed: {e}"}
 
 
 # ─── Concordance (Torah only) ─────────────────────────────────────────────────

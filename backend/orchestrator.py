@@ -10,7 +10,7 @@ Process for ask():
 import json
 import asyncio
 from typing import Optional
-from .agents import get_agent, build_fetch_tool_schema, get_all_configs, list_agents as list_all_agents, MIDRASH_SOURCES
+from .agents import get_agent, build_fetch_tool_schema, get_all_configs, list_agents as list_all_agents, SOURCES
 from .services import conversation as conv_store
 from .services import sefaria as sefaria_svc
 from .services import llm_client
@@ -318,7 +318,7 @@ async def ask(
         ref    = tool_input.get("ref", "")
         source = tool_input.get("source", "")
         print(f"[tool] fetch_sefaria({ref!r}, {source!r})")
-        return await sefaria_svc.execute_fetch_tool(ref, source, all_configs, MIDRASH_SOURCES)
+        return await sefaria_svc.execute_fetch_tool(ref, source, SOURCES)
 
     rashi_block = (
         "RASHI'S COMMENTARY ON THESE VERSES (verified from Sefaria):\n" +
