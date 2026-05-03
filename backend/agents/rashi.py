@@ -19,15 +19,6 @@ class RashiAgent(CommentatorAgent):
                 "accretions, and no manuscripts survive from the first century "
                 "after composition."
             ),
-            # Silbermann/Rosenbaum is the standard English translation on Sefaria
-            en_translation_prefs=[
-                "silbermann",
-                "rosenbaum",
-                "sefaria community translation",
-                "english",
-            ],
-            en_translation_label="Silbermann",
-            show_translation_caveat=False,
             can_read=[],  # Rashi predates all other commentators in this tool
         ))
 

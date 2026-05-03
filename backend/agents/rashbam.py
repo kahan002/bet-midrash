@@ -19,19 +19,6 @@ class RashbamAgent(CommentatorAgent):
                 "Numbers and Deuteronomy. Single manuscript survived; "
                 "the Breslau ms. was lost in the Shoah."
             ),
-            # Lockshin is the gold-standard scholarly translation but is not
-            # currently in Sefaria's API-accessible version library.
-            # These entries are kept intentionally — if Sefaria adds Lockshin,
-            # the preference list will pick it up automatically.
-            en_translation_prefs=[
-                "rashbam's commentary on the torah",  # Lockshin — not yet on Sefaria
-                "lockshin",                            # Lockshin alternate title
-                "hachut hameshulash",                  # Munk — current best available
-                "eliyahu munk",
-                "munk",
-            ],
-            en_translation_label="Munk",
-            show_translation_caveat=True,  # Munk occasionally paraphrases or omits
             can_read=["rashi"],            # Rashbam read Rashi — his grandfather
         ))
 

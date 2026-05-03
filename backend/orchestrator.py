@@ -272,10 +272,11 @@ async def ask(
 
     async def safe_fetch_passage(ref: str) -> Optional[str]:
         try:
+            src_meta = SOURCES.get(agent_id, {})
             p = await sefaria_svc.fetch_passage(
                 ref,
                 agent.config.sefaria_prefix,
-                en_translation_prefs=agent.config.en_translation_prefs,
+                en_translation_prefs=src_meta.get("en_translation_prefs", []),
             )
             return p["context_string"]
         except Exception as e:

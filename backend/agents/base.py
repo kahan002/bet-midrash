@@ -6,32 +6,25 @@ from abc import ABC, abstractmethod
 @dataclass
 class AgentConfig:
     """
-    All static metadata for a commentator agent.
+    Static metadata for a commentator agent.
 
-    This is the single source of truth for everything commentator-specific:
-    - Sefaria fetch prefix (used by the fetch tool)
-    - Translation preferences (which English translator to prefer)
-    - UI metadata (name, color, etc.)
+    Translation preferences (en_translation_prefs, en_translation_label,
+    show_translation_caveat) live in the SOURCES registry in agents/__init__.py
+    — not here. That is the single source of truth for all source metadata.
 
-    When you add a new agent, you add its AgentConfig here and everything
-    else — the fetch tool schema, the UI caveat, the translation picker —
-    updates automatically.
+    AgentConfig carries only what is needed for agent identity and behavior:
+    UI display, Sefaria prefix for the pre-fetch path, and historical context.
     """
-    id: str                              # e.g. 'rashbam'
-    name: str                            # e.g. 'Rashbam'
-    hebrew_name: str                     # e.g. 'רשב"ם'
-    full_name: str                       # e.g. 'Rabbi Shmuel ben Meir'
-    dates: str                           # e.g. 'c.1080–c.1160'
-    tradition: str                       # e.g. 'Franco-Jewish Tosafist'
-    color: str                           # hex for UI theming, e.g. '#8b3a2a'
-    sefaria_prefix: str                  # e.g. 'Rashbam on '
-    coverage_notes: str                  # what books/sections are preserved
-    en_translation_prefs: list[str]      # ordered preferred English translators
-                                         # (lowercase substrings of versionTitle)
-    en_translation_label: str            # human-readable label, e.g. 'Munk'
-    show_translation_caveat: bool        # True if translation sometimes paraphrases/omits
-    can_read: list[str]                  # agent ids this commentator could historically
-                                         # have read. Used to flag counterfactual responses.
+    id: str                  # e.g. 'rashbam'
+    name: str                # e.g. 'Rashbam'
+    hebrew_name: str         # e.g. 'רשב"ם'
+    full_name: str           # e.g. 'Rabbi Shmuel ben Meir'
+    dates: str               # e.g. 'c.1080–c.1160'
+    tradition: str           # e.g. 'Franco-Jewish Tosafist'
+    color: str               # hex for UI theming, e.g. '#8b3a2a'
+    sefaria_prefix: str      # e.g. 'Rashbam on ' — used by orchestrator pre-fetch
+    coverage_notes: str      # what books/sections are preserved
+    can_read: list[str]      # agent ids this commentator could historically have read
 
 
 class CommentatorAgent(ABC):

@@ -19,9 +19,6 @@ class IbnEzraAgent(CommentatorAgent):
                 "commentaries survive on Sefaria. Use source='ibn_ezra_hakatzar' "
                 "to fetch the short Exodus commentary."
             ),
-            en_translation_prefs=["strickman", "silver", "english"],
-            en_translation_label="Strickman/Silver",
-            show_translation_caveat=False,
             can_read=["rashi", "rashbam"],
         ))
 
