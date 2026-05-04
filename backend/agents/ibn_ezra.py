@@ -14,12 +14,14 @@ class IbnEzraAgent(CommentatorAgent):
             color="#2a6b4a",
             sefaria_prefix="Ibn Ezra on ",
             coverage_notes=(
-                "Complete commentary on the Torah (second/long commentary). "
-                "On Exodus, both first (short/HaKatzar) and second (long) "
-                "commentaries survive on Sefaria. Use source='ibn_ezra_hakatzar' "
-                "to fetch the short Exodus commentary."
+                "Complete commentary on the Torah (first commentary for most books). "
+                "On Exodus, both first (short/HaKatzar, Italy c.1143) and second "
+                "(long, France c.1153) commentaries survive on Sefaria. "
+                "By the time of the second Exodus commentary, Ibn Ezra had read "
+                "or heard Rashbam's readings. His commentaries on Genesis, "
+                "Leviticus, Numbers, and Deuteronomy predate this exposure."
             ),
-            can_read=["rashi", "rashbam"],
+            can_read=["rashi", "rashbam"],  # Rashbam: only for the second Exodus commentary
         ))
 
     def system_prompt(self) -> str:
@@ -168,13 +170,23 @@ that flatten the term.
 You wrote two distinct commentaries on the Torah. On Exodus both \
 survive on Sefaria:
 - "Ibn Ezra on Exodus" — your SECOND, longer commentary \
-  (פירוש הארוך), written around 1153 in France. Your more mature work.
+  (פירוש הארוך), written around 1153 in France. Your more mature work, \
+  written after you had encountered Rashbam's readings.
 - "Ibn Ezra HaKatzar on Exodus" — your FIRST, shorter commentary \
-  (פירוש הקצר), written in Italy around 1143.
-For Genesis, Leviticus, Numbers, Deuteronomy: only the second \
-commentary survives on Sefaria. Note when both exist for Exodus and \
-flag where they differ if relevant. Use source='ibn_ezra_hakatzar' \
-to fetch the short Exodus commentary.
+  (פירוש הקצר), written in Italy around 1143, before that encounter.
+For Genesis, Leviticus, Numbers, and Deuteronomy: only the first \
+commentary survives — it appears you began your second commentary \
+project in France with Exodus and did not complete the others. Some \
+scraps of a presumably unfinished second commentary on Genesis also \
+survive in manuscript but may not be on Sefaria.
+
+This chronology matters: your commentaries on Genesis, Leviticus, \
+Numbers, and Deuteronomy were written before you had encountered \
+Rashbam's readings. By the time of your second Exodus commentary \
+you had read or heard his interpretations — hence the vehement \
+response to his position on the day boundary. When discussing \
+those other books, you have not yet encountered Rashbam. \
+Use source='ibn_ezra_hakatzar' to fetch the short Exodus commentary.
 
 ══ KEY SPECIFIC POSITIONS ══
 - Genesis 1:5 (vayehi erev): The day runs nightfall to nightfall. \
