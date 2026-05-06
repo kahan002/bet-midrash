@@ -457,17 +457,24 @@ function renderSourcePanel(source) {
   panel.className = 'source-panel' + (source.collapsed ? ' collapsed' : '');
   panel.id = 'panel-' + source.id;
 
-  const title = source.hasCommentary
-    ? `${source.ref} · ${source.agentName}`
-    : `${source.ref} · Bible only`;
+  const isBiblePanel = source.agentId === 'bible';
+  // Resolve display name — prefer loaded agent name, fall back to static map, then id
+  const _staticLabels = {
+    'bible': 'Bible', 'rashi': 'Rashi', 'rashbam': 'Rashbam',
+    'ibn_ezra': 'Ibn Ezra', 'ibn_ezra_hakatzar': 'Ibn Ezra (Short Commentary)',
+  };
+  Object.values(_loadedAgents).forEach(a => { _staticLabels[a.id] = a.name; });
+  const displayName = _staticLabels[source.agentId] || source.agentName || source.agentId;
+  const title = isBiblePanel ? `${source.ref} · Bible` : `${source.ref} · ${displayName}`;
 
   const bodyHTML = source.hasCommentary
     ? buildVerseHTML(source.bible, source.commentary, source.agentName, source.ref)
     : buildVerseHTML(source.bible, {en:[], he:[]}, source.agentName, source.ref);
 
-  const noCommentaryNote = !source.hasCommentary
+  // Only show "no commentary" note for agent panels, not for bible-only panels
+  const noCommentaryNote = (!source.hasCommentary && !isBiblePanel)
     ? `<div style="font-style:italic;color:var(--text2);font-size:12px;padding:4px 0 8px;">
-        No ${esc(source.agentName)} commentary on Sefaria for this passage.
+        No ${esc(source.agentName)} commentary preserved on Sefaria for this passage.
        </div>`
     : '';
 
@@ -530,8 +537,16 @@ function refContainedIn(refA, refB) {
 }
 
 function addSourcePanel(ref, agentId, agentName, bible, commentary) {
-  // Collapse all existing panels
-  loadedSources.forEach(s => { s.collapsed = true; });
+  // If adding a bible-only panel, skip if an agent panel for this ref exists
+  if (agentId === 'bible' && loadedSources.some(s => s.ref === ref && s.agentId !== 'bible')) {
+    return false;
+  }
+
+  // Collapse all existing panels except — don't collapse agent panels when
+  // adding a bible panel (agent panel should stay open as primary content)
+  if (agentId !== 'bible') {
+    loadedSources.forEach(s => { s.collapsed = true; });
+  }
 
   const hasCommentary = !!(
     (commentary.en && commentary.en.some(Boolean)) ||
@@ -592,7 +607,12 @@ async function loadPassage(ref, suppressAgentCall = false) {
 
     document.getElementById('sefaria-loading').style.display = 'none';
 
-    const activeAgentName = (_loadedAgents[AGENT_ID] || {}).name || AGENT_ID;
+    const sourceLabels = {
+      'bible': 'Bible', 'rashi': 'Rashi', 'rashbam': 'Rashbam',
+      'ibn_ezra': 'Ibn Ezra', 'ibn_ezra_hakatzar': 'Ibn Ezra (Short Commentary)',
+    };
+    Object.values(_loadedAgents).forEach(a => { sourceLabels[a.id] = a.name; });
+    const activeAgentName = sourceLabels[AGENT_ID] || AGENT_ID;
     const hasCommentary = addSourcePanel(
       data.ref, AGENT_ID, activeAgentName,
       data.bible, data.commentary
@@ -688,10 +708,12 @@ async function callAgent(message, role = 'user') {
       const activeAgentName = (_loadedAgents[AGENT_ID] || {}).name || AGENT_ID;
       const sourceLabels = {
         'bible': 'Bible', 'rashbam': 'Rashbam', 'rashi': 'Rashi',
+        'ibn_ezra': 'Ibn Ezra', 'ibn_ezra_hakatzar': 'Ibn Ezra (Short Commentary)',
         'bereishit_rabbah': 'Bereishit Rabbah', 'shemot_rabbah': 'Shemot Rabbah',
         'vayikra_rabbah': 'Vayikra Rabbah', 'bamidbar_rabbah': 'Bamidbar Rabbah',
         'devarim_rabbah': 'Devarim Rabbah',
       };
+      // Override with live agent names in case they differ
       Object.values(_loadedAgents).forEach(a => { sourceLabels[a.id] = a.name; });
 
       for (const tc of data.tool_calls) {
@@ -700,7 +722,11 @@ async function callAgent(message, role = 'user') {
         const srcName = sourceLabels[tc.source] || tc.source;
         const isBible = tc.source === 'bible';
 
-        // Use structured verse arrays if available, fall back to flat strings
+        // Skip adding a bible panel if an agent panel for this ref already exists
+        if (isBible && loadedSources.some(s => s.ref === tc.ref && s.agentId !== 'bible')) {
+          continue;
+        }
+
         const bible = isBible ? {
           he: tc.he_verses || (tc.text_he ? [tc.text_he] : []),
           en: tc.en_verses || (tc.text_en ? [tc.text_en] : []),
