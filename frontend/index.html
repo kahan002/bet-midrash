@@ -458,13 +458,7 @@ function renderSourcePanel(source) {
   panel.id = 'panel-' + source.id;
 
   const isBiblePanel = source.agentId === 'bible';
-  // Resolve display name — prefer loaded agent name, fall back to static map, then id
-  const _staticLabels = {
-    'bible': 'Bible', 'rashi': 'Rashi', 'rashbam': 'Rashbam',
-    'ibn_ezra': 'Ibn Ezra', 'ibn_ezra_hakatzar': 'Ibn Ezra (Short Commentary)',
-  };
-  Object.values(_loadedAgents).forEach(a => { _staticLabels[a.id] = a.name; });
-  const displayName = _staticLabels[source.agentId] || source.agentName || source.agentId;
+  const displayName = getSourceLabel(source.agentId);
   const title = isBiblePanel ? `${source.ref} · Bible` : `${source.ref} · ${displayName}`;
 
   const bodyHTML = source.hasCommentary
@@ -607,12 +601,7 @@ async function loadPassage(ref, suppressAgentCall = false) {
 
     document.getElementById('sefaria-loading').style.display = 'none';
 
-    const sourceLabels = {
-      'bible': 'Bible', 'rashi': 'Rashi', 'rashbam': 'Rashbam',
-      'ibn_ezra': 'Ibn Ezra', 'ibn_ezra_hakatzar': 'Ibn Ezra (Short Commentary)',
-    };
-    Object.values(_loadedAgents).forEach(a => { sourceLabels[a.id] = a.name; });
-    const activeAgentName = sourceLabels[AGENT_ID] || AGENT_ID;
+    const activeAgentName = getSourceLabel(AGENT_ID);
     const hasCommentary = addSourcePanel(
       data.ref, AGENT_ID, activeAgentName,
       data.bible, data.commentary
@@ -785,6 +774,39 @@ function handleKey(e) {
 function autoResize(el) {
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+// ── Source label resolution ───────────────────────────────────────────────────
+// Three-layer lookup for human-readable source names:
+//   1. FIXED_SOURCE_LABELS — canonical, never changes, covers non-agent sources
+//   2. _loadedAgents — dynamically populated once the API responds
+//   3. Graceful fallback — formats raw ids into readable names
+//      e.g. "ibn_ezra_hakatzar" → "Ibn Ezra Hakatzar"
+// Calling this function is safe even before _loadedAgents has loaded.
+
+const FIXED_SOURCE_LABELS = {
+  // Biblical text
+  'bible': 'Bible',
+  // Midrash collections
+  'bereishit_rabbah': 'Bereishit Rabbah',
+  'shemot_rabbah':    'Shemot Rabbah',
+  'vayikra_rabbah':   'Vayikra Rabbah',
+  'bamidbar_rabbah':  'Bamidbar Rabbah',
+  'devarim_rabbah':   'Devarim Rabbah',
+  // Variant commentaries (not active agents)
+  'ibn_ezra_hakatzar': 'Ibn Ezra (Short Commentary on Exodus)',
+};
+
+function getSourceLabel(sourceId) {
+  // Layer 1: fixed canonical sources
+  if (FIXED_SOURCE_LABELS[sourceId]) return FIXED_SOURCE_LABELS[sourceId];
+  // Layer 2: dynamically loaded agents (may not be populated yet)
+  if (_loadedAgents[sourceId]) return _loadedAgents[sourceId].name;
+  // Layer 3: graceful fallback — convert snake_case id to Title Case words
+  return sourceId
+    .split('_')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
 }
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
