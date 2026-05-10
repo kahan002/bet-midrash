@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 load_dotenv()
 
-from .agents import list_agents, get_agent
+from .agents import list_agents, get_agent, SOURCES
 from .orchestrator import ask, debate_turn
 from .services import sefaria as sefaria_svc
 from .services import conversation as conv_store
@@ -84,8 +84,11 @@ async def get_passage(req: PassageRequest):
     """
     try:
         agent = get_agent(req.agent_id)
+        src_meta = SOURCES.get(req.agent_id, {})
         result = await sefaria_svc.fetch_passage(
-            req.ref, agent.config.sefaria_prefix
+            req.ref,
+            agent.config.sefaria_prefix,
+            en_translation_prefs=src_meta.get("en_translation_prefs", []),
         )
         return result
     except KeyError as e:
