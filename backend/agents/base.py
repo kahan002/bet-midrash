@@ -21,7 +21,8 @@ class AgentConfig:
     full_name: str           # e.g. 'Rabbi Shmuel ben Meir'
     dates: str               # e.g. 'c.1080–c.1160'
     tradition: str           # e.g. 'Franco-Jewish Tosafist'
-    color: str               # hex for UI theming, e.g. '#8b3a2a'
+    color: str               # hex for UI theming in light mode, e.g. '#8b3a2a'
+    color_dark: str          # hex for dark mode — must meet WCAG AA on #1e1c18
     sefaria_prefix: str      # e.g. 'Rashbam on ' — used by orchestrator pre-fetch
     coverage_notes: str      # what books/sections are preserved
     can_read: list[str]      # agent ids this commentator could historically have read
@@ -129,5 +130,6 @@ class CommentatorAgent(ABC):
             "dates": self.config.dates,
             "tradition": self.config.tradition,
             "color": self.config.color,
+            "color_dark": self.config.color_dark,
             "coverage_notes": self.config.coverage_notes,
         }

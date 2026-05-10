@@ -478,7 +478,9 @@ function applyMode() {
 // ════════════════════════════════════════════════════════════════════════════
 
 function applyAgentUI(agent) {
-  document.documentElement.style.setProperty('--agent-color', agent.color);
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const color  = (isDark && agent.color_dark) ? agent.color_dark : agent.color;
+  document.documentElement.style.setProperty('--agent-color', color);
   document.querySelector('#header-title').textContent = 'Torah Study Companion';
   document.querySelector('#header-sub').textContent =
     Object.values(state.loadedAgents).map(a => a.name).join(' · ');
@@ -636,10 +638,14 @@ function addSourcePanel(ref, agentId, bible, commentary) {
     (commentary.en && commentary.en.some(Boolean)) ||
     (commentary.he && commentary.he.some(Boolean)));
 
-  // Exact duplicate — update in place
+  // Exact duplicate — update commentary but preserve existing bible data
   const existing = state.loadedSources.find(s => s.ref === ref && s.agentId === agentId);
   if (existing) {
-    Object.assign(existing, { bible, commentary, hasCommentary, collapsed: false });
+    // Merge: keep existing bible if new one is empty
+    if (bible.he?.some(Boolean) || bible.en?.some(Boolean)) existing.bible = bible;
+    existing.commentary  = commentary;
+    existing.hasCommentary = hasCommentary;
+    existing.collapsed   = false;
     rerenderSources();
     return hasCommentary;
   }

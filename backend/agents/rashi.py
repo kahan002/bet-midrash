@@ -12,6 +12,7 @@ class RashiAgent(CommentatorAgent):
             dates="1040–1105",
             tradition="Franco-Jewish, Troyes",
             color="#2a5a8b",
+            color_dark="#4a8abf",  # 4.60:1 on #1e1c18 — passes AA
             sefaria_prefix="Rashi on ",
             coverage_notes=(
                 "Complete commentary on the entire Torah. "

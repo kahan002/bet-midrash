@@ -12,6 +12,7 @@ class RashbamAgent(CommentatorAgent):
             dates="c.1080–c.1160",
             tradition="Franco-Jewish Tosafist",
             color="#8b3a2a",
+            color_dark="#c9785a",  # 5.12:1 on #1e1c18 — passes AA
             sefaria_prefix="Rashbam on ",
             coverage_notes=(
                 "Fullest in Genesis and Exodus (especially Mishpatim). "

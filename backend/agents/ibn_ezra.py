@@ -12,6 +12,7 @@ class IbnEzraAgent(CommentatorAgent):
             dates="1089–1167",
             tradition="Sephardic, wandering scholar",
             color="#2a6b4a",
+            color_dark="#5aab7a",  # 6.11:1 on #1e1c18 — passes AA
             sefaria_prefix="Ibn Ezra on ",
             coverage_notes=(
                 "Complete commentary on the Torah (first commentary for most books). "
