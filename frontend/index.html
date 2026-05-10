@@ -773,7 +773,13 @@ function copyConversation(event) {
 
 async function loadRef() {
   const raw = document.getElementById('ref-input').value.trim();
-  if (raw) await loadPassage(raw);
+  if (!raw) return;
+  // Basic validation — must contain a book name and chapter:verse pattern
+  if (!/[a-zA-Z]/.test(raw) || !/\d/.test(raw)) {
+    showError('Please enter a valid reference, e.g. "Genesis 1:1" or "Exodus 21:1-10"');
+    return;
+  }
+  await loadPassage(raw);
 }
 
 async function loadPassage(ref, suppressAgentCall = false) {
