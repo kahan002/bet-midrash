@@ -7,7 +7,7 @@ class IbnEzraAgent(CommentatorAgent):
         super().__init__(AgentConfig(
             id="ibn_ezra",
             name="Ibn Ezra",
-            hebrew_name="אבן עזרא",
+            hebrew_name='א"ע',
             full_name="Rabbi Avraham ibn Ezra",
             dates="1089–1167",
             tradition="Sephardic, wandering scholar",
