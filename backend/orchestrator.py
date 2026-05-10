@@ -256,9 +256,6 @@ async def ask(
 
     all_words = extracted.get("words", [])[:3]
 
-    print(f"[self-retrieval] verses: {all_verse_refs}")
-    print(f"[self-retrieval] rashi: {all_rashi_refs}")
-    print(f"[self-retrieval] words: {all_words}")
 
     # ── Step 2: fetch everything in parallel ──────────────────────────────────
     # Primary verse: fetched thick and treated as the loaded context.
@@ -318,7 +315,6 @@ async def ask(
             return {"status": "error", "message": f"Unknown tool: {tool_name}"}
         ref    = tool_input.get("ref", "")
         source = tool_input.get("source", "")
-        print(f"[tool] fetch_sefaria({ref!r}, {source!r})")
         return await sefaria_svc.execute_fetch_tool(ref, source, SOURCES)
 
     rashi_block = (
