@@ -1,33 +1,35 @@
 # Torah Study — Commentator Agents
-
 A multi-agent system for studying Torah with AI-powered commentators.
 Each commentator is an object implementing a common interface; an
-orchestrator manages routing and multi-agent debate turns.
+orchestrator manages routing and conversation history.
+
+**Live:** https://bet-midrash.onrender.com
 
 ## Project structure
-
 ```
 torah-study/
 ├── backend/
 │   ├── agents/
-│   │   ├── __init__.py      # Registry — add new agents here
-│   │   ├── base.py          # CommentatorAgent interface
-│   │   └── rashbam.py       # RashbamAgent
+│   │   ├── __init__.py      # Unified SOURCES registry + agent registry
+│   │   ├── base.py          # CommentatorAgent interface + AgentConfig
+│   │   ├── rashi.py         # RashiAgent
+│   │   ├── rashbam.py       # RashbamAgent
+│   │   └── ibn_ezra.py      # IbnEzraAgent (inc. HaKatzar variant)
 │   ├── services/
 │   │   ├── llm_client.py    # Thin LLM wrapper (swap providers here)
-│   │   ├── sefaria.py       # Sefaria API
-│   │   └── conversation.py  # Per-session conversation store
-│   ├── orchestrator.py      # ask() and debate_turn()
+│   │   ├── sefaria.py       # Sefaria API + execute_fetch_tool
+│   │   └── conversation.py  # Shared conversation store with summarization
+│   ├── orchestrator.py      # ask() — extraction, fetch, agent response
 │   └── main.py              # FastAPI app
 ├── frontend/
-│   └── index.html           # Study UI (connects to backend API)
+│   └── index.html           # Study UI (single-file vanilla JS)
+├── render.yaml              # Render deployment config
 ├── requirements.txt
 ├── .env.example
 └── README.md
 ```
 
 ## Local setup
-
 ```bash
 # 1. Clone and enter the project
 cd torah-study
@@ -44,47 +46,33 @@ cp .env.example .env
 # Edit .env and paste your Anthropic API key
 
 # 5. Start the backend
-cd backend
-uvicorn main:app --reload --port 8000
+uvicorn backend.main:app --reload --port 8000
 
-# 6. Open the frontend
-# Open frontend/index.html in your browser
-# Or: python -m http.server 3000 --directory frontend
-# Then visit http://localhost:3000
+# 6. Open http://localhost:8000
 ```
 
 ## API endpoints
-
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | /api/agents | List all available commentator agents |
 | POST | /api/passage | Fetch Sefaria text for a ref + agent |
 | POST | /api/chat | Send a message to one agent |
-| POST | /api/debate | Ask one agent to respond to another |
-| DELETE | /api/history/{agent_id} | Clear conversation history |
 
 ## Adding a new commentator
+1. Create `backend/agents/yourname.py` following the pattern in `rashbam.py`
+2. Add the agent to `_REGISTRY` in `backend/agents/__init__.py`
+3. Add source metadata to `SOURCES` in `backend/agents/__init__.py`
+4. Add a static fallback radio button in `frontend/index.html`
 
-1. Create `backend/agents/rashi.py` following the pattern in `rashbam.py`
-2. Add `RashiAgent()` to the registry in `backend/agents/__init__.py`
-3. That's it — the API and UI pick it up automatically
+The tool schema, agent list API, and frontend switcher all update automatically.
 
-## Deployment (Render.com — free tier)
+## Deployment (Render)
+The repo includes `render.yaml` which configures everything automatically.
 
-1. Push to a GitHub repo
+1. Push to GitHub
 2. Create a new Web Service on Render, point at the repo
-3. Set build command: `pip install -r requirements.txt`
-4. Set start command: `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`
-5. Add environment variable: `ANTHROPIC_API_KEY=sk-ant-...`
-6. Deploy — share the URL with your educators/students
+3. Add environment variable: `ANTHROPIC_API_KEY=sk-ant-...`
+4. Deploy — Render auto-deploys on every push to main
 
-## Deployment (Railway)
-
-```bash
-# Install Railway CLI
-npm i -g @railway/cli
-railway login
-railway init
-railway up
-# Set ANTHROPIC_API_KEY in the Railway dashboard
-```
+**Optional environment variable:**
+- `LLM_MODEL` — override the default model (currently `claude-sonnet-4-6`)
