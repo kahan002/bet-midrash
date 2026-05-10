@@ -543,12 +543,24 @@ function buildVerseHTML(bible, comm, agentName, ref) {
     // may have null at index 0 with real content at index 1).
     if (!bHe && !bEn && !cHe && !cEn) continue;
 
-    // Verse number: for single-verse refs always show startVerse.
-    // For ranges, derive from array index — but note Sefaria may return sparse
-    // arrays, so an empty slot at index 0 means index 1 is genuinely verse 2.
-    const verseNum = totalVerses <= 1 ? startVerse : startVerse + i;
+    // Verse label: handle three cases:
+    // 1. Single verse ref → always show startVerse
+    // 2. Range ref, one block per verse → show startVerse + i
+    // 3. Range ref, fewer blocks than verses (Sefaria merged) → show range label
+    let vrefLabel;
+    if (totalVerses <= 1) {
+      vrefLabel = `Verse ${startVerse}`;
+    } else if (len >= totalVerses) {
+      vrefLabel = `Verse ${startVerse + i}`;
+    } else {
+      // Merged: distribute verses across blocks proportionally
+      const versesPerBlock = totalVerses / len;
+      const blockStart = Math.round(startVerse + i * versesPerBlock);
+      const blockEnd   = Math.round(startVerse + (i + 1) * versesPerBlock) - 1;
+      vrefLabel = blockStart === blockEnd ? `Verse ${blockStart}` : `Verses ${blockStart}–${blockEnd}`;
+    }
 
-    html += `<div class="verse-block"><div class="vref">Verse ${verseNum}</div>`;
+    html += `<div class="verse-block"><div class="vref">${vrefLabel}</div>`;
     if (bHe) html += `<div class="he-text">${esc(bHe)}</div>`;
     if (bEn) html += `<div class="verse-en">${esc(bEn)}</div>`;
     if (cHe) {
