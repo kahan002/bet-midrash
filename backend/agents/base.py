@@ -130,6 +130,4 @@ class CommentatorAgent(ABC):
             "tradition": self.config.tradition,
             "color": self.config.color,
             "coverage_notes": self.config.coverage_notes,
-            "en_translation_label": self.config.en_translation_label,
-            "show_translation_caveat": str(self.config.show_translation_caveat),
         }
