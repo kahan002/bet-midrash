@@ -955,7 +955,19 @@ function switchAgent(agentId) {
 
     (data.agents || []).forEach(a => { state.loadedAgents[a.id] = a; });
 
-    if (state.loadedAgents[DEFAULT_PARSHAN]) state.agentId = DEFAULT_PARSHAN;
+    // Determine which agent to activate:
+    // 1. Whatever the user has already selected (checked radio button)
+    // 2. Otherwise the DEFAULT_PARSHAN if available
+    // 3. Otherwise first agent in list
+    const checkedRadio = document.querySelector('input[name="agent"]:checked');
+    const userSelected = checkedRadio?.value;
+    if (userSelected && state.loadedAgents[userSelected]) {
+      state.agentId = userSelected;
+    } else if (state.loadedAgents[DEFAULT_PARSHAN]) {
+      state.agentId = DEFAULT_PARSHAN;
+    } else if (data.agents?.length > 0) {
+      state.agentId = data.agents[0].id;
+    }
 
     const sorted = (data.agents || []).sort((a, b) => {
       return (AGENT_ORDER.indexOf(a.id) ?? 99) - (AGENT_ORDER.indexOf(b.id) ?? 99);
