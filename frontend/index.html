@@ -310,7 +310,6 @@ body {
       </div>
       <div id="text-scroll">
         <div id="placeholder">
-          <div class="he-big">ר</div>
           <div id="placeholder-text">Enter a reference above to load texts from Sefaria</div>
           <div style="font-size:11px;margin-top:4px;font-family:sans-serif;">Hebrew and English will appear here</div>
         </div>
@@ -497,8 +496,6 @@ function applyAgentUI(agent) {
     `Ask ${agent.name} about a verse or passage… (Enter to send)`;
   const radio = document.getElementById('radio-' + agent.id);
   if (radio) radio.checked = true;
-  const heBig = document.querySelector('.he-big');
-  if (heBig) heBig.textContent = agent.hebrew_name;
   const phText = document.getElementById('placeholder-text');
   if (phText) phText.textContent = 'Enter a reference above to load texts from Sefaria';
 }
