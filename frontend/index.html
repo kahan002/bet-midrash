@@ -540,17 +540,32 @@ function buildVerseHTML(bible, comm, agentName, ref) {
 
   let html = '';
   for (let i = 0; i < len; i++) {
-    html += `<div class="verse-block"><div class="vref">${verseLabel(i,startVerse,totalVerses,len)}</div>`;
-    if (bible.he?.[i]) html += `<div class="he-text">${esc(bible.he[i])}</div>`;
-    if (bible.en?.[i]) html += `<div class="verse-en">${esc(bible.en[i])}</div>`;
-    if (comm.he?.[i]) {
+    const bHe = bible.he?.[i];
+    const bEn = bible.en?.[i];
+    const cHe = comm.he?.[i];
+    const cEn = comm.en?.[i];
+
+    // Skip completely empty slots — Sefaria sometimes returns sparse arrays
+    // where a verse has no biblical text AND no commentary (e.g. Deut 1:1
+    // may have null at index 0 with real content at index 1).
+    if (!bHe && !bEn && !cHe && !cEn) continue;
+
+    // Verse number: for single-verse refs always show startVerse.
+    // For ranges, derive from array index — but note Sefaria may return sparse
+    // arrays, so an empty slot at index 0 means index 1 is genuinely verse 2.
+    const verseNum = totalVerses <= 1 ? startVerse : startVerse + i;
+
+    html += `<div class="verse-block"><div class="vref">Verse ${verseNum}</div>`;
+    if (bHe) html += `<div class="he-text">${esc(bHe)}</div>`;
+    if (bEn) html += `<div class="verse-en">${esc(bEn)}</div>`;
+    if (cHe) {
       html += `<div class="sub-lbl sub-lbl-he" style="margin-top:10px">${esc(agentName)} (Hebrew)</div>`;
-      html += `<div class="he-text">${esc(comm.he[i])}</div>`;
+      html += `<div class="he-text">${esc(cHe)}</div>`;
     }
-    if (comm.en?.[i]) {
+    if (cEn) {
       const titleNote = comm.he_version_title ? ` · ${esc(comm.he_version_title)}` : '';
       html += `<div class="sub-lbl sub-lbl-en">${esc(agentName)} (translation${titleNote})</div>`;
-      html += `<div class="rashbam-en">${esc(comm.en[i])}</div>`;
+      html += `<div class="rashbam-en">${esc(cEn)}</div>`;
     }
     html += `</div>`;
   }
