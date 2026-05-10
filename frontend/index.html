@@ -48,13 +48,6 @@ body {
   padding: 11px 20px; border-bottom: 0.5px solid var(--border);
   background: var(--bg2); flex-shrink: 0;
 }
-#agent-glyph {
-  width: 38px; height: 38px; border-radius: 50%;
-  background: var(--agent-color);
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'Noto Serif Hebrew', serif; font-size: 13px;
-  color: #fff; font-weight: 500; flex-shrink: 0;
-}
 #header-title { font-family: 'Crimson Pro', serif; font-size: 19px; font-weight: 500; }
 #header-sub { font-size: 11px; color: var(--text2); margin-top: 1px; font-family: sans-serif; }
 
@@ -277,7 +270,6 @@ body {
 <body>
 <div id="shell">
   <div id="header">
-    <div id="agent-glyph">רש"י</div>
     <div>
       <div id="header-title">Torah Study Companion</div>
       <div id="header-sub">Medieval Commentators</div>
@@ -487,7 +479,6 @@ function applyMode() {
 
 function applyAgentUI(agent) {
   document.documentElement.style.setProperty('--agent-color', agent.color);
-  document.getElementById('agent-glyph').textContent = agent.hebrew_name;
   document.querySelector('#header-title').textContent = 'Torah Study Companion';
   document.querySelector('#header-sub').textContent =
     Object.values(state.loadedAgents).map(a => a.name).join(' · ');
